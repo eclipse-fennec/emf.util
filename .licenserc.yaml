@@ -34,6 +34,7 @@ header:
     - '**/*.md'
     - '**/*.MD'
     - '**/.keep'
+    - '**/.gitkeep'
     - '**/*.jetproperties'
     - '**/*.javajet'
     - '**/*.javajetinc'

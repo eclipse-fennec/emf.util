@@ -1,15 +1,9 @@
 name: Documentation
 
 on:
-  push:
-    branches:
-      - snapshot
-      - main
-    # Only rebuild when docs sources or the site config change.
-    paths:
-      - 'docs/**'
-      - 'docs-site/**'
-      - '.github/workflows/docs.yml'
+  # Manual rebuild only. The automatic docs build + Pages deploy runs as gated jobs
+  # in snapshot.yml / release.yml (after a successful license check + build), so the
+  # documentation is never published unless the build succeeded.
   workflow_dispatch:
 
 # Read-only by default; the deploy job escalates to the Pages scopes it needs.
