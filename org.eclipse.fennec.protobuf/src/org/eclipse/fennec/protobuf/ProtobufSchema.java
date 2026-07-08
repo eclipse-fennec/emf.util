@@ -56,6 +56,7 @@ public final class ProtobufSchema {
 	private final FileDescriptorProto fileProto;
 	private final FileDescriptor fileDescriptor;
 	private final Map<EClass, Descriptor> messageByClass = new HashMap<>();
+	private final ProtobufContext defaultContext;
 
 	private ProtobufSchema(EPackage ePackage) {
 		this.ePackage = ePackage;
@@ -72,6 +73,11 @@ public final class ProtobufSchema {
 				messageByClass.put(eClass, fileDescriptor.findMessageTypeByName(eClass.getName()));
 			}
 		}
+		// Package-level annotation provides the default payload configuration for the
+		// no-argument writer()/reader(); an explicit ProtobufContext overrides it.
+		this.defaultContext = ProtobufContext.defaults()
+				.withTypeStrategy(ProtobufAnnotations.typeStrategy(ePackage, ProtobufTypeStrategy.DEFAULT))
+				.withSmartCompression(ProtobufAnnotations.smartCompression(ePackage, true));
 	}
 
 	/** Derives a schema from an {@link EPackage}. The result is immutable; cache it per package. */
@@ -124,11 +130,19 @@ public final class ProtobufSchema {
 	}
 
 	public ProtobufWriter writer() {
-		return new ProtobufWriter(this);
+		return writer(defaultContext);
+	}
+
+	public ProtobufWriter writer(ProtobufContext context) {
+		return new ProtobufWriter(this, context);
 	}
 
 	public ProtobufReader reader() {
-		return new ProtobufReader(this);
+		return reader(defaultContext);
+	}
+
+	public ProtobufReader reader(ProtobufContext context) {
+		return new ProtobufReader(this, context);
 	}
 
 	/** Renders the derived descriptors as proto3 source text. */

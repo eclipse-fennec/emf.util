@@ -128,6 +128,36 @@ class ProtobufResourceTest {
 	}
 
 	@Test
+	@DisplayName("resolves same-resource references after reloading under a different URI")
+	void sameResourceReferenceResolves() throws Exception {
+		EObject category = model.newCategory();
+		category.eSet(model.categoryName, "Food");
+		EObject milk = model.newProduct();
+		milk.eSet(model.productName, "Milk");
+		milk.eSet(model.productCategory, category); // non-containment ref to a same-resource object
+		@SuppressWarnings("unchecked")
+		List<EObject> products = (List<EObject>) category.eGet(model.categoryProducts);
+		products.add(milk);
+
+		Resource out = newResourceSet().createResource(URI.createURI("a.protobin"));
+		out.getContents().add(category);
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		out.save(baos, null);
+
+		// Load under a DIFFERENT URI: a relative href must still resolve into the loaded graph.
+		Resource in = newResourceSet().createResource(URI.createURI("b.protobin"));
+		in.load(new ByteArrayInputStream(baos.toByteArray()), null);
+
+		EObject loadedCategory = in.getContents().get(0);
+		@SuppressWarnings("unchecked")
+		EObject loadedMilk = ((List<EObject>) loadedCategory.eGet(model.categoryProducts)).get(0);
+		EObject ref = (EObject) loadedMilk.eGet(model.productCategory);
+
+		assertThat(ref.eIsProxy()).isFalse();
+		assertThat(ref).isSameAs(loadedCategory);
+	}
+
+	@Test
 	@DisplayName("reuses a shared schema cache passed via options")
 	void sharedSchemaCacheOption() throws Exception {
 		ProtobufSchemaCache cache = new ProtobufSchemaCache();

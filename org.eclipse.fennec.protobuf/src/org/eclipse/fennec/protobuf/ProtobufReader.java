@@ -17,9 +17,11 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.InternalEObject;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 
 import com.google.protobuf.ByteString;
@@ -29,20 +31,21 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 /**
- * Deserializes Protobuf wire bytes back into EMF objects using the descriptors
- * of a {@link ProtobufSchema}. The expected root {@link EClass} must be supplied
- * by the caller (Protobuf carries no type tag); nested polymorphic objects carry
- * their own type in the {@link ProtobufSchema#ANY_MESSAGE}/{@link ProtobufSchema#REF_MESSAGE}
- * wrappers, so their concrete subtype is reconstructed. Non-containment references
- * are restored as proxies carrying the stored target URI; resolution is left to
- * the {@code ResourceSet}.
+ * Deserializes Protobuf wire bytes back into EMF objects using a {@link ProtobufSchema}
+ * and a {@link ProtobufContext}. The root {@link EClass} is supplied by the caller;
+ * wrapped (polymorphic / cross-package / {@code EObject}) objects carry a type
+ * discriminator that is resolved — strategy-agnostically — via the context's package
+ * registry, and their bytes are parsed against their own package's schema. Non-containment
+ * references become proxies carrying the (resource-relative-resolved) target URI.
  */
 public final class ProtobufReader {
 
 	private final ProtobufSchema schema;
+	private final ProtobufContext context;
 
-	ProtobufReader(ProtobufSchema schema) {
+	ProtobufReader(ProtobufSchema schema, ProtobufContext context) {
 		this.schema = schema;
+		this.context = context;
 	}
 
 	/** Parses {@code data} as an instance of {@code eClass}. */
@@ -68,7 +71,7 @@ public final class ProtobufReader {
 		Descriptor descriptor = message.getDescriptorForType();
 
 		for (EStructuralFeature f : eClass.getEAllStructuralFeatures()) {
-			if (!f.isChangeable()) {
+			if (!ProtobufAnnotations.reads(f)) {
 				continue;
 			}
 			FieldDescriptor fd = descriptor.findFieldByName(f.getName());
@@ -121,14 +124,10 @@ public final class ProtobufReader {
 			return read(msg, declared);
 		}
 		Descriptor anyDesc = msg.getDescriptorForType();
-		String eClassName = (String) msg.getField(anyDesc.findFieldByName(ProtobufSchema.FIELD_ECLASS));
+		String discriminator = (String) msg.getField(anyDesc.findFieldByName(ProtobufSchema.FIELD_ECLASS));
 		ByteString data = (ByteString) msg.getField(anyDesc.findFieldByName(ProtobufSchema.FIELD_DATA));
-		EClass actual = schema.eClassByName(eClassName);
-		try {
-			return read(DynamicMessage.parseFrom(schema.descriptorFor(actual), data), actual);
-		} catch (InvalidProtocolBufferException e) {
-			throw new ProtobufException("Could not parse embedded " + eClassName, e);
-		}
+		EClass actual = context.resolveType(discriminator, declared);
+		return schemaFor(actual.getEPackage()).reader(context).fromBytes(data.toByteArray(), actual);
 	}
 
 	private EObject readReferenceValue(Object value, EClass declared, boolean isMessage) {
@@ -137,17 +136,31 @@ public final class ProtobufReader {
 		}
 		DynamicMessage ref = (DynamicMessage) value;
 		Descriptor refDesc = ref.getDescriptorForType();
-		String eClassName = (String) ref.getField(refDesc.findFieldByName(ProtobufSchema.FIELD_ECLASS));
+		String discriminator = (String) ref.getField(refDesc.findFieldByName(ProtobufSchema.FIELD_ECLASS));
 		String uri = (String) ref.getField(refDesc.findFieldByName(ProtobufSchema.FIELD_URI));
-		return proxy(schema.eClassByName(eClassName), uri);
+		return proxy(context.resolveType(discriminator, declared), uri);
 	}
 
-	private static EObject proxy(EClass targetType, String uri) {
+	private EObject proxy(EClass targetType, String uri) {
 		if (targetType.isAbstract() || targetType.isInterface()) {
 			throw new ProtobufException("Cannot create a proxy for abstract reference type " + targetType.getName());
 		}
 		InternalEObject proxy = (InternalEObject) EcoreUtil.create(targetType);
-		proxy.eSetProxyURI(URI.createURI(uri));
+		proxy.eSetProxyURI(resolve(uri));
 		return proxy;
+	}
+
+	private URI resolve(String stored) {
+		URI uri = URI.createURI(stored);
+		Resource ctx = context.contextResource();
+		if (ctx != null && uri.hasFragment() && uri.trimFragment().toString().isEmpty()) {
+			// relative fragment ("#...") -> resolve into the resource being loaded
+			return ctx.getURI().appendFragment(uri.fragment());
+		}
+		return uri;
+	}
+
+	private ProtobufSchema schemaFor(EPackage ePackage) {
+		return ePackage == schema.ePackage() ? schema : context.schemaFor(ePackage);
 	}
 }

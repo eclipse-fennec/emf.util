@@ -90,16 +90,17 @@ final class DescriptorFactory {
 	}
 
 	/**
-	 * A local type is polymorphic (needs a type-discriminated wrapper) if it is
-	 * abstract/an interface or has a concrete subtype in this package.
+	 * A reference target needs a type-discriminated wrapper unless it is a local,
+	 * concrete, leaf {@link EClass}. So we wrap for abstract/interface targets,
+	 * targets with a concrete subtype, {@code EObject}, and any cross-package or
+	 * subpackage target — cases where the concrete type is only known at runtime.
+	 * The wrapper carries the actual EClass (as a discriminator) so it resolves.
 	 */
-	private boolean polymorphic(EClass type) {
-		if (!isLocal(type)) {
-			return false;
-		}
-		if (type.isAbstract() || type.isInterface()) {
-			return true;
-		}
+	private boolean needsWrapper(EClass type) {
+		return !(isLocal(type) && !type.isAbstract() && !type.isInterface() && !hasConcreteSubtype(type));
+	}
+
+	private boolean hasConcreteSubtype(EClass type) {
 		for (EClassifier c : ePackage.getEClassifiers()) {
 			if (c instanceof EClass x && x != type && !x.isAbstract() && !x.isInterface()
 					&& x.getEAllSuperTypes().contains(type)) {
@@ -122,7 +123,8 @@ final class DescriptorFactory {
 				continue;
 			}
 			for (EStructuralFeature f : eClass.getEAllStructuralFeatures()) {
-				if (f instanceof EReference r && polymorphic(r.getEReferenceType())) {
+				if (f instanceof EReference r && ProtobufAnnotations.describes(r)
+						&& needsWrapper(r.getEReferenceType())) {
 					any |= r.isContainment();
 					ref |= !r.isContainment();
 				}
@@ -144,11 +146,24 @@ final class DescriptorFactory {
 	private DescriptorProto buildMessage(EClass eClass) {
 		validateName(eClass.getName(), "EClass");
 		DescriptorProto.Builder msg = DescriptorProto.newBuilder().setName(eClass.getName());
-		List<EStructuralFeature> features = eClass.getEAllStructuralFeatures();
+		// Only features that are actually (de)serialized get a field (and a field
+		// number): transient/ignored features are dropped; see ProtobufAnnotations.
+		List<EStructuralFeature> features = new ArrayList<>();
+		for (EStructuralFeature f : eClass.getEAllStructuralFeatures()) {
+			if (ProtobufAnnotations.describes(f)) {
+				features.add(f);
+			}
+		}
 		Map<EStructuralFeature, Integer> numbers = assignFieldNumbers(eClass, features);
+		Set<String> fieldNames = new HashSet<>();
 
 		for (EStructuralFeature f : features) {
 			validateName(f.getName(), "feature");
+			if (!fieldNames.add(f.getName())) {
+				throw new ProtobufException("Duplicate feature name '" + f.getName() + "' in message "
+						+ eClass.getName() + " (name clash via multiple inheritance?); "
+						+ "protobuf field names must be unique per message");
+			}
 			FieldDescriptorProto.Builder field = FieldDescriptorProto.newBuilder()
 					.setName(f.getName())
 					.setNumber(numbers.get(f));
@@ -158,7 +173,7 @@ final class DescriptorFactory {
 			boolean scalarPresence;
 
 			if (f instanceof EReference ref) {
-				scalarPresence = configureReference(eClass, ref, field);
+				scalarPresence = configureReference(ref, field);
 			} else {
 				EAttribute attr = (EAttribute) f;
 				EDataType dt = attr.getEAttributeType();
@@ -184,19 +199,17 @@ final class DescriptorFactory {
 	}
 
 	/** Sets the field type for a reference; returns whether the field needs scalar presence. */
-	private boolean configureReference(EClass owner, EReference ref, FieldDescriptorProto.Builder field) {
+	private boolean configureReference(EReference ref, FieldDescriptorProto.Builder field) {
 		EClass target = ref.getEReferenceType();
 		if (ref.isContainment()) {
-			if (!isLocal(target)) {
-				throw new ProtobufException("Cross-package containment is not supported: "
-						+ owner.getName() + "." + ref.getName() + " -> " + target.getName());
-			}
-			String message = polymorphic(target) ? ProtobufSchema.ANY_MESSAGE : target.getName();
+			// Local concrete leaf -> natural nested message; otherwise the EObjectAny
+			// wrapper (carries the actual type + the object's own bytes).
+			String message = needsWrapper(target) ? ProtobufSchema.ANY_MESSAGE : target.getName();
 			field.setType(FieldDescriptorProto.Type.TYPE_MESSAGE).setTypeName(typeRef(message));
 			return false; // message fields carry presence intrinsically
 		}
-		// non-containment: URI reference; polymorphic targets keep the actual type
-		if (polymorphic(target)) {
+		// non-containment: URI reference; polymorphic/cross-package targets also keep the actual type
+		if (needsWrapper(target)) {
 			field.setType(FieldDescriptorProto.Type.TYPE_MESSAGE).setTypeName(typeRef(ProtobufSchema.REF_MESSAGE));
 			return false;
 		}

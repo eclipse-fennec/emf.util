@@ -92,8 +92,8 @@ class SchemaTest {
 	}
 
 	@Test
-	@DisplayName("rejects cross-package containment")
-	void crossPackageContainmentRejected() {
+	@DisplayName("wraps cross-package containment in the EObjectAny wrapper")
+	void crossPackageContainmentWrapped() {
 		EcoreFactory ef = EcoreFactory.eINSTANCE;
 		EClass external = ef.createEClass();
 		external.setName("External");
@@ -108,9 +108,11 @@ class SchemaTest {
 		containment.setContainment(true);
 		model.product.getEStructuralFeatures().add(containment);
 
-		assertThatThrownBy(() -> ProtobufSchema.forPackage(model.pkg))
-				.isInstanceOf(ProtobufException.class)
-				.hasMessageContaining("Cross-package containment");
+		// Cross-package containment is now supported via the type-discriminated wrapper.
+		FieldDescriptor ext = ProtobufSchema.forPackage(model.pkg).descriptorFor(model.product)
+				.findFieldByName("external");
+		assertThat(ext.getType()).isEqualTo(FieldDescriptor.Type.MESSAGE);
+		assertThat(ext.getMessageType().getName()).isEqualTo(ProtobufSchema.ANY_MESSAGE);
 	}
 
 	@Test

@@ -22,9 +22,11 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceImpl;
+import org.eclipse.fennec.protobuf.ProtobufContext;
 import org.eclipse.fennec.protobuf.ProtobufException;
 import org.eclipse.fennec.protobuf.ProtobufSchema;
 import org.eclipse.fennec.protobuf.ProtobufSchemaCache;
+import org.eclipse.fennec.protobuf.ProtobufTypeStrategy;
 
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
@@ -59,6 +61,12 @@ public class ProtobufResource extends ResourceImpl {
 	 */
 	public static final String OPTION_SCHEMA_CACHE = "protobuf.schema.cache";
 
+	/** Save/load option key: type-discriminator strategy (a {@link ProtobufTypeStrategy} or its name). */
+	public static final String OPTION_TYPE_STRATEGY = "protobuf.typeStrategy";
+
+	/** Save/load option key: {@code Boolean} smart compression (compact same-package type discriminators). */
+	public static final String OPTION_SMART_COMPRESSION = "protobuf.smartCompression";
+
 	private final ProtobufSchemaCache localCache = new ProtobufSchemaCache();
 
 	public ProtobufResource(URI uri) {
@@ -68,6 +76,8 @@ public class ProtobufResource extends ResourceImpl {
 	@Override
 	protected void doSave(OutputStream outputStream, Map<?, ?> options) throws IOException {
 		try {
+			ProtobufSchemaCache cache = cache(options);
+			ProtobufContext ctx = context(options, cache);
 			CodedOutputStream out = CodedOutputStream.newInstance(outputStream);
 			List<EObject> roots = getContents();
 			out.writeInt32NoTag(roots.size());
@@ -80,7 +90,7 @@ public class ProtobufResource extends ResourceImpl {
 				}
 				out.writeStringNoTag(ePackage.getNsURI());
 				out.writeStringNoTag(eClass.getName());
-				out.writeByteArrayNoTag(schema(ePackage, options).writer().toBytes(root));
+				out.writeByteArrayNoTag(cache.get(ePackage).writer(ctx).toBytes(root));
 			}
 			out.flush();
 		} catch (RuntimeException e) {
@@ -91,6 +101,8 @@ public class ProtobufResource extends ResourceImpl {
 	@Override
 	protected void doLoad(InputStream inputStream, Map<?, ?> options) throws IOException {
 		try {
+			ProtobufSchemaCache cache = cache(options);
+			ProtobufContext ctx = context(options, cache);
 			CodedInputStream in = CodedInputStream.newInstance(inputStream);
 			int count = in.readInt32();
 			if (count < 0) {
@@ -101,7 +113,7 @@ public class ProtobufResource extends ResourceImpl {
 				String className = in.readString();
 				byte[] bytes = in.readByteArray();
 				EClass eClass = resolve(nsURI, className);
-				getContents().add(schema(eClass.getEPackage(), options).reader().fromBytes(bytes, eClass));
+				getContents().add(cache.get(eClass.getEPackage()).reader(ctx).fromBytes(bytes, eClass));
 			}
 		} catch (RuntimeException e) {
 			throw record("load", e);
@@ -115,8 +127,26 @@ public class ProtobufResource extends ResourceImpl {
 		return new IOException("Failed to " + operation + " Protobuf resource " + getURI(), cause);
 	}
 
-	private ProtobufSchema schema(EPackage ePackage, Map<?, ?> options) {
-		return cache(options).get(ePackage);
+	/** Builds the (de)serialization context from the options + this resource set. */
+	private ProtobufContext context(Map<?, ?> options, ProtobufSchemaCache cache) {
+		ResourceSet rs = getResourceSet();
+		EPackage.Registry registry = rs != null ? rs.getPackageRegistry() : EPackage.Registry.INSTANCE;
+		ProtobufContext ctx = ProtobufContext.defaults()
+				.withSchemaCache(cache)
+				.withPackageRegistry(registry)
+				.withContextResource(this);
+		if (options != null) {
+			Object strategy = options.get(OPTION_TYPE_STRATEGY);
+			if (strategy instanceof ProtobufTypeStrategy s) {
+				ctx.withTypeStrategy(s);
+			} else if (strategy instanceof String str) {
+				ctx.withTypeStrategy(ProtobufTypeStrategy.from(str, ProtobufTypeStrategy.DEFAULT));
+			}
+			if (options.get(OPTION_SMART_COMPRESSION) instanceof Boolean smart) {
+				ctx.withSmartCompression(smart);
+			}
+		}
+		return ctx;
 	}
 
 	/** The shared cache from the options map if present, otherwise this resource's own. */
