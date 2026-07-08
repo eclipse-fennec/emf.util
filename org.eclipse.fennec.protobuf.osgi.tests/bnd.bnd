@@ -1,0 +1,15 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+
+-library: \
+	enableOSGi-Test,\
+	enableEMF
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.eclipse.fennec.protobuf;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api,\
+	com.google.protobuf;version=latest
+
+Private-Package: org.eclipse.fennec.protobuf.osgi.tests
+
+Bundle-Version: 1.0.0.SNAPSHOT

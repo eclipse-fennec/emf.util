@@ -1,0 +1,110 @@
+plugins {
+  id "org.sonarqube" version "6.2.0.5505"
+  id 'jacoco'
+  id 'java'
+}
+
+// We need to define a repository for the root project, otherwise Jacoco dependencies cannot be resolved
+repositories {
+  mavenCentral()
+}
+
+subprojects {
+
+    //  Apply plugin: 'jacoco' to all submodules JUnit tests are generated as generated/jacoco/test.exec
+    apply plugin: 'jacoco'
+    apply plugin: 'java'
+    // We need to define a repository, otherwise Jacoco dependencies cannot be resolved
+    repositories {
+        mavenCentral()
+    }
+    // Allow gradle to enable JUnit support in submodules
+    // Exclude @Tag("perf") tests from normal builds — run via perfTest task
+    test {
+        useJUnitPlatform {
+            excludeTags 'perf'
+        }
+    }
+
+    // Dedicated task for the slow scaling tests (@Tag("perf"), kept out of the fast build).
+    // Their STRUCTURAL assertions (constant SQL statement counts at scale — deterministic) DO gate;
+    // timing is only logged, so this task is safe to fail the build on a real regression.
+    tasks.register('perfTest', Test) {
+        useJUnitPlatform {
+            includeTags 'perf'
+        }
+    }
+
+    // Add JUnit dependencies for modules that have Gradle tests
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.14.2'
+        testImplementation 'org.junit.platform:junit-platform-launcher:1.14.2'
+        testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
+        testImplementation 'org.assertj:assertj-core:3.27.7'
+    }
+
+    // Coverage floor: a catastrophic-regression tripwire (e.g. a bundle's tests deleted) wired
+    // into `check`. Conservative baseline of 30% instructions on the hand-written code of the
+    // library bundles that carry plain-JUnit tests — generated code and test-only/OSGi-covered
+    // bundles are out of scope. Ratchet upward as coverage is deliberately raised.
+    // Add each utility's core bundle here as it gains plain-JUnit tests.
+    def coverageFloorBundles = [
+            'org.eclipse.fennec.protobuf',
+    ]
+    afterEvaluate {
+        if (project.name in coverageFloorBundles) {
+            tasks.named('jacocoTestCoverageVerification') {
+                // exclude generated code (ANTLR parser, EMF src-gen models/profiles)
+                def generated = ['**/antlr/**', '**/profile/**', 'org/open/oasis/**']
+                classDirectories.setFrom(files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: generated)
+                }))
+                violationRules {
+                    rule {
+                        limit {
+                            counter = 'INSTRUCTION'
+                            value = 'COVEREDRATIO'
+                            minimum = 0.30
+                        }
+                    }
+                }
+            }
+            tasks.named('check').configure { dependsOn 'jacocoTestCoverageVerification' }
+        }
+    }
+
+}
+
+// Sonar setup — values come from gradle.properties (github_org, github_repository)
+sonarqube {
+  properties {
+    property "sonar.projectName", github_repository
+    property "sonar.projectKey", github_org + "-" + github_repository
+    property "sonar.organization", github_org
+    property "sonar.host.url", "https://sonarcloud.io"
+    property "sonar.coverage.jacoco.xmlReportPaths", rootDir.toString() + "/build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml"
+  }
+}
+
+task codeCoverageReport(type: JacocoReport) {
+    dependsOn(test)
+    // Gather execution data from all subprojects for JUnit generated/jacoco/test.exec for OSGi Tests generated/tmp/testOSGi/generated/jacoco.exec
+    // Latter are generated via agent in the test.bndrun
+    executionData fileTree(project.rootDir.absolutePath).include("**/**/*.exec")
+
+    // Add all relevant sourcesets from the subprojects
+    subprojects.each {
+        sourceSets it.sourceSets.main
+    }
+
+    // Generate xml reports for tools like sonar and html for humans
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}
+
+tasks.named("sonar") {
+    dependsOn(codeCoverageReport)
+}

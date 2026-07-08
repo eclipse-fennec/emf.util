@@ -1,0 +1,49 @@
+# Eclipse Fennec workspace fragment (Gradle) — additive bnd properties.
+#
+# Layered on top of the bndtools `workspace-minimal` base template, which already
+# provides the Local + Release LocalIndexedRepos and `-releaserepo: Release`.
+# We therefore only ADD what is missing and deliberately do NOT redefine the Local
+# or Release repositories and do NOT override `-releaserepo` (Maven Central release
+# is driven by GitHub Actions, not the workspace).
+
+# Single source of truth for the project coordinates: gradle.properties at the
+# workspace root (also read natively by Gradle). bnd imports it so the same values
+# drive both Gradle and bnd. Set github_org / github_repository / maven_group_id
+# there (see cnf/SETUP.MD).
+-include: ${workspace}/gradle.properties
+
+# Enable the Fennec library setups (resolved from Maven Central via central.mvn).
+# fennecCodec re-added 2026-07-03 for E3 (OData-JSON data codec) — backing artifact
+# org.eclipse.fennec.codec:org.eclipse.fennec.codec.workspace.library:0.1.0-SNAPSHOT.
+-library: \
+	fennec,\
+	fennecTest,\
+	fennecJacoco,\
+	fennecEMF,\
+	fennecEMFMetadata,\
+	fennecM2X,\
+	fennecJPA,\
+	fennecEMFModels,\
+	fennecCodec
+
+base-version: 1.0.0
+javac.source: 21
+javac.target: 21
+-require-bnd: "(version>=7.1.0)"
+-jpms-module-info:
+
+# Maven Central (read-only) — not provided by workspace-minimal.
+# High plugin index so it never collides with the base plugins (.1/.2).
+-plugin.5.Central: \
+	aQute.bnd.repository.maven.provider.MavenBndRepository; \
+		snapshotUrl="https://central.sonatype.com/repository/maven-snapshots/"; \
+		releaseUrl=https://repo.maven.apache.org/maven2/; \
+		index=${.}/central.mvn; \
+		readOnly=true; \
+		poll.time=-1; \
+		name="Central"
+
+# Project coordinates, imported from gradle.properties (single source).
+github-orga:    ${github_org}
+github-project: ${github_repository}
+-groupid:       ${maven_group_id}

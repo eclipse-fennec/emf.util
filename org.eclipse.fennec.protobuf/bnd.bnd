@@ -1,0 +1,16 @@
+Bundle-Name: Fennec EMF Protobuf
+Bundle-Description: Schema-driven (de)serialization of EMF models to Google Protocol Buffers, \
+ with descriptors derived directly from an EPackage (no protoc, no generated code).
+
+Export-Package: \
+	org.eclipse.fennec.protobuf,\
+	org.eclipse.fennec.protobuf.resource
+
+-library: enableEMF
+
+-testpath: \
+	assertj-core;version=latest
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	com.google.protobuf;version=latest

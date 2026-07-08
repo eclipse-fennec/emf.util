@@ -1,0 +1,92 @@
+name: Snapshot Build
+
+on:
+  push:
+    # Snapshot publishing only happens on pushes to the snapshot branch.
+    branches:
+      - snapshot
+      - initial
+  pull_request:
+    # Never run on pull requests.
+    branches-ignore:
+      - '*'
+
+# Publishing uses Sonatype/GPG secrets, not the GITHUB_TOKEN — read-only repo scope.
+permissions:
+  contents: read
+
+concurrency:
+  group: snapshot-publish
+  cancel-in-progress: false
+
+env:
+  LC_ALL: en_US.UTF-8
+  GRADLE_OPTS: >-
+    -Dorg.gradle.parallel=true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  snapshot:
+    name: Gradle Snapshot Build (Java ${{ matrix.java-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: [21, 25]
+      fail-fast: false
+    env:
+      CS_PASSWORD: ${{ secrets.CENTRAL_SONATYPE_TOKEN_PASSWORD }}
+      CS_USERNAME: ${{ secrets.CENTRAL_SONATYPE_TOKEN_USERNAME }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      DO_RELEASE: false
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Git Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Gradle Wrapper Validation
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: "temurin"
+          cache: "gradle"
+          java-version: ${{ matrix.java-version }}
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+      - name: Gradle version
+        run: ./gradlew --no-daemon --version
+      - name: Setup GPG and jp environment
+        if: matrix.java-version == 21
+        run: |
+          sudo apt-get update && sudo apt-get install -y gnupg2 jp
+          echo "$GPG_PRIVATE_KEY" > private.key
+          echo "$GPG_PASSPHRASE" | gpg --batch --passphrase-fd 0 --pinentry-mode loopback --no-tty --quiet --yes --import private.key
+          rm private.key
+        shell: bash
+      - name: Build and Release
+        if: matrix.java-version == 21
+        run: ./gradlew build testOSGi release --stacktrace --scan --info
+      - name: Build only
+        if: matrix.java-version != 21
+        run: ./gradlew build testOSGi --stacktrace --info
+      - name: Run Performance Tests
+        run: ./gradlew perfTest --info
+      - name: Publish Test Results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: test-results-java-${{ matrix.java-version }}
+          path: |
+            **/build/test-results/**/TEST-*.xml
+            **/generated/test-reports/**/TEST-*.xml
+      - name: Delete GPG key from keyring
+        if: always() && matrix.java-version == 21
+        run: rm -rf ~/.gnupg
+        shell: bash

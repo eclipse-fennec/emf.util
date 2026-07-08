@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned-by-SHA up to date (Dependabot rewrites the SHA and
+  # its "# vX.Y.Z" comment together, so hardening does not mean staleness).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+
+  # Gradle: plugins and the test-scope dependencies declared in build.gradle.
+  # (Runtime/OSGi dependencies are managed by bnd via cnf/ext/central.mvn, not here.)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+
+  # VitePress documentation site.
+  - package-ecosystem: "npm"
+    directory: "/docs-site"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"

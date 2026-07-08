@@ -1,0 +1,14 @@
+Bundle-Name: Fennec EMF Protobuf OSGi
+Bundle-Description: Registers a Protobuf Resource.Factory as an OSGi service for the \
+ Fennec EMF OSGi runtime, bound by file extension / content type.
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.protobuf;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	com.google.protobuf;version=latest
+
+Private-Package: org.eclipse.fennec.protobuf.osgi
