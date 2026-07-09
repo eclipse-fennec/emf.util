@@ -57,7 +57,7 @@ r.getContents().add(food);
 ProtobufSchema schema = ProtobufSchema.forPackage(ShopPackage.eINSTANCE);
 
 byte[] bytes = schema.writer().toBytes(food);
-Category restored = (Category) schema.reader().fromBytes(bytes, ShopPackage.Literals.CATEGORY);
+Category restored = (Category) schema.reader().fromBytes(bytes); // root type travels in the stream
 
 assert restored.getProducts().get(0).getPrice() == 1.29;
 ```
@@ -96,7 +96,7 @@ shelter.getAnimals().add(mimi);
 
 ProtobufSchema schema = ProtobufSchema.forPackage(ShelterPackage.eINSTANCE);
 Shelter read = (Shelter) schema.reader()
-        .fromBytes(schema.writer().toBytes(shelter), ShelterPackage.Literals.SHELTER);
+        .fromBytes(schema.writer().toBytes(shelter));
 
 // Concrete subtypes and their inherited + own features are preserved:
 assert read.getAnimals().get(0) instanceof Dog;

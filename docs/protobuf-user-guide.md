@@ -20,8 +20,8 @@ Plain Java — derive a schema once per package, then read/write:
 ```java
 ProtobufSchema schema = ProtobufSchema.forPackage(myEPackage);
 
-byte[] bytes = schema.writer().toBytes(myEObject);      // serialize
-EObject copy = schema.reader().fromBytes(bytes, myEClass); // deserialize
+byte[] bytes = schema.writer().toBytes(myEObject);      // serialize (self-describing)
+EObject copy = schema.reader().fromBytes(bytes);        // deserialize — type comes from the stream
 
 String proto = schema.toProtoSource();                  // export a .proto (proto3)
 ```
@@ -56,9 +56,13 @@ Understanding the mapping helps you predict the output and choose the right conf
    known at runtime — polymorphism, cross-package/subpackage targets, or `EObject`-typed
    references — the value is wrapped with a small **type discriminator** so the exact type is
    reconstructed on read (see [References and inheritance](#references-and-inheritance)).
-5. **Self-describing resources.** Because a bare Protobuf message carries no type tag, the
-   `Resource` frames each root object with its `EPackage` nsURI + `EClass` name, so `load`
-   reconstructs the exact types (the referenced packages must be registered).
+5. **Self-describing output.** A bare Protobuf message carries no type tag, so `toBytes`
+   frames each root with its `EPackage` nsURI + `EClass` name; `fromBytes(bytes)` reads that
+   frame back and reconstructs the exact type — you never pass an `EClass` in. The type is
+   resolved against the reader's own package first, then the context's `EPackage.Registry`
+   (so cross-package roots need their package registered). The `Resource` builds on the same
+   frame per root. If you already know the type and want the bare message, use
+   `writer().toBareBytes(obj)` + `reader().fromBareBytes(bytes, eClass)`.
 
 Only features that are actually serialized get a field: transient, derived, and
 [`ignore`d](#feature-filters) features are omitted and do not consume a field number.
@@ -111,11 +115,15 @@ The discriminator's encoding is configurable — see
 ProtobufSchema schema = ProtobufSchema.forPackage(shopPackage);
 
 byte[] bytes = schema.writer().toBytes(category);
-Category restored = (Category) schema.reader().fromBytes(bytes, ShopPackage.Literals.CATEGORY);
+Category restored = (Category) schema.reader().fromBytes(bytes); // type read from the stream
 
 // Streams are supported too:
 schema.writer().write(category, outputStream);
-EObject read = schema.reader().read(inputStream, ShopPackage.Literals.CATEGORY);
+EObject read = schema.reader().read(inputStream);
+
+// If the type is known up front you can skip the frame and read a bare message:
+byte[] bare = schema.writer().toBareBytes(category);
+Category same = (Category) schema.reader().fromBareBytes(bare, ShopPackage.Literals.CATEGORY);
 ```
 
 ### As an EMF `Resource` (load/save by URL)
