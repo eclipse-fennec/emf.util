@@ -1,0 +1,12 @@
+Bundle-Name: Fennec EMF Protobuf Descriptor Importer
+Bundle-Description: Derives Ecore from a compiled Protobuf FileDescriptorSet \
+ (bootstrap/design-time). Kept separate from the Protobuf runtime, mirroring the SOAP split.
+
+-library: enableEMF
+
+-buildpath: \
+	com.google.protobuf;version=latest,\
+	org.eclipse.fennec.protobuf;version=snapshot
+
+-testpath: \
+	assertj-core;version=latest

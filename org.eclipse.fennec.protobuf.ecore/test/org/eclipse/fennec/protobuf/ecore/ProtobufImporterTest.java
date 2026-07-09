@@ -7,7 +7,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.eclipse.fennec.protobuf;
+package org.eclipse.fennec.protobuf.ecore;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,10 +17,15 @@ import java.util.List;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EEnum;
+import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
-import org.eclipse.fennec.protobuf.ecore.ProtobufImporter;
+import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.protobuf.ProtobufAnnotations;
+import org.eclipse.fennec.protobuf.ProtobufException;
+import org.eclipse.fennec.protobuf.ProtobufSchema;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -47,14 +52,88 @@ class ProtobufImporterTest {
 		return (EClass) pkg.getEClassifier(name);
 	}
 
+	// --- an inline model, exported to descriptors via our own ProtobufSchema, then re-imported ---
+
+	private static byte[] shopDescriptorSet() {
+		EcoreFactory ef = EcoreFactory.eINSTANCE;
+		EcorePackage ec = EcorePackage.eINSTANCE;
+
+		EPackage pkg = ef.createEPackage();
+		pkg.setName("shop");
+		pkg.setNsURI("urn:shop");
+		pkg.setNsPrefix("shop");
+
+		EEnum status = ef.createEEnum();
+		status.setName("Status");
+		status.getELiterals().add(literal(ef, "ACTIVE", 0));
+		status.getELiterals().add(literal(ef, "DISCONTINUED", 1));
+
+		EClass category = ef.createEClass();
+		category.setName("Category");
+		EClass product = ef.createEClass();
+		product.setName("Product");
+
+		EAttribute categoryName = attr(ef, "name", ec.getEString());
+		ProtobufAnnotations.setFieldNumber(categoryName, 1);
+		EReference products = ref(ef, "products", product, true, true);
+		ProtobufAnnotations.setFieldNumber(products, 2);
+		category.getEStructuralFeatures().add(categoryName);
+		category.getEStructuralFeatures().add(products);
+
+		EAttribute price = attr(ef, "price", ec.getEDouble());
+		EAttribute count = attr(ef, "count", ec.getEInt());
+		count.setUnsettable(true);
+		EAttribute code = attr(ef, "code", ec.getEByteArray());
+		EAttribute weight = attr(ef, "weight", ec.getEBigDecimal());
+		EAttribute tags = attr(ef, "tags", ec.getEString());
+		tags.setUpperBound(-1);
+		EAttribute prodStatus = attr(ef, "status", status);
+		EReference categoryRef = ref(ef, "category", category, false, false);
+		product.getEStructuralFeatures().add(price);
+		product.getEStructuralFeatures().add(count);
+		product.getEStructuralFeatures().add(code);
+		product.getEStructuralFeatures().add(weight);
+		product.getEStructuralFeatures().add(tags);
+		product.getEStructuralFeatures().add(prodStatus);
+		product.getEStructuralFeatures().add(categoryRef);
+
+		pkg.getEClassifiers().add(status);
+		pkg.getEClassifiers().add(category);
+		pkg.getEClassifiers().add(product);
+
+		FileDescriptorProto proto = ProtobufSchema.forPackage(pkg).fileDescriptor().toProto();
+		return FileDescriptorSet.newBuilder().addFile(proto).build().toByteArray();
+	}
+
+	private static EAttribute attr(EcoreFactory ef, String name, org.eclipse.emf.ecore.EClassifier type) {
+		EAttribute a = ef.createEAttribute();
+		a.setName(name);
+		a.setEType(type);
+		return a;
+	}
+
+	private static EReference ref(EcoreFactory ef, String name, EClass type, boolean containment, boolean many) {
+		EReference r = ef.createEReference();
+		r.setName(name);
+		r.setEType(type);
+		r.setContainment(containment);
+		if (many) {
+			r.setUpperBound(-1);
+		}
+		return r;
+	}
+
+	private static EEnumLiteral literal(EcoreFactory ef, String name, int value) {
+		EEnumLiteral l = ef.createEEnumLiteral();
+		l.setName(name);
+		l.setValue(value);
+		return l;
+	}
+
 	@Test
 	@DisplayName("round-trips our own descriptors back to an equivalent (flattened) Ecore model")
 	void roundTripFromOurDescriptors() {
-		ShopModel model = new ShopModel();
-		FileDescriptorProto proto = ProtobufSchema.forPackage(model.pkg).fileProto();
-		byte[] set = FileDescriptorSet.newBuilder().addFile(proto).build().toByteArray();
-
-		List<EPackage> packages = ProtobufImporter.fromDescriptorSet(set);
+		List<EPackage> packages = ProtobufImporter.fromDescriptorSet(shopDescriptorSet());
 
 		assertThat(packages).hasSize(1);
 		EPackage pkg = packages.get(0);
@@ -88,11 +167,7 @@ class ProtobufImporterTest {
 	@Test
 	@DisplayName("documents the structural losses: BigDecimal->string, non-containment ref->string")
 	void structuralLosses() {
-		ShopModel model = new ShopModel();
-		byte[] set = FileDescriptorSet.newBuilder()
-				.addFile(ProtobufSchema.forPackage(model.pkg).fileProto()).build().toByteArray();
-
-		EPackage pkg = ProtobufImporter.fromDescriptorSet(set).get(0);
+		EPackage pkg = ProtobufImporter.fromDescriptorSet(shopDescriptorSet()).get(0);
 		EClass product = eClass(pkg, "Product");
 
 		// EBigDecimal was exported as a string -> comes back as EString (cannot be widened).

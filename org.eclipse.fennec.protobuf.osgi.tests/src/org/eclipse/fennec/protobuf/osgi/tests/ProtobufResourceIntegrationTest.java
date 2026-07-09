@@ -26,6 +26,7 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.emf.osgi.annotation.require.RequireEMF;
 import org.eclipse.fennec.protobuf.resource.ProtobufResource;
 import org.eclipse.fennec.protobuf.resource.ProtobufResourceFactory;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)
 @DisplayName("Protobuf Resource.Factory OSGi registration")
+@RequireEMF
 public class ProtobufResourceIntegrationTest {
 
 	@Test

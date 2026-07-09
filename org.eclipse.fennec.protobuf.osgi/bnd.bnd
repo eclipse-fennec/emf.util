@@ -11,4 +11,8 @@ Bundle-Description: Registers a Protobuf Resource.Factory as an OSGi service for
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	com.google.protobuf;version=latest
 
+Export-Package: \
+	org.eclipse.fennec.protobuf,\
+	org.eclipse.fennec.protobuf.resource
+	
 Private-Package: org.eclipse.fennec.protobuf.osgi

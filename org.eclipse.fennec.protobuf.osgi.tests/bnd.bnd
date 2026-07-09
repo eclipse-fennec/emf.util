@@ -1,4 +1,6 @@
 Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+Bundle-Name: Fennec EMF Protobuf OSGi Test
+Bundle-Description: EMF Protobuf OSGi Integration Test
 
 -library: \
 	enableOSGi-Test,\
@@ -9,7 +11,4 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.eclipse.fennec.protobuf;version=snapshot,\
 	org.eclipse.fennec.emf.osgi.api,\
 	com.google.protobuf;version=latest
-
-Private-Package: org.eclipse.fennec.protobuf.osgi.tests
-
-Bundle-Version: 1.0.0.SNAPSHOT
+	

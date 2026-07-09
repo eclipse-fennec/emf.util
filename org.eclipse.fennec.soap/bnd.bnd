@@ -1,0 +1,14 @@
+Bundle-Name: Fennec EMF SOAP
+Bundle-Description: SOAP 1.1 envelope (de)serialization of EMF model instances as XML, for \
+ the Fennec EMF OSGi runtime. The WSDL/XSD -> Ecore importer lives in the separate \
+ org.eclipse.fennec.soap.ecore bundle (it needs the org.eclipse.xsd toolchain; this runtime does not).
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.emf.ecore.xmi;version=latest,\
+	org.xmlsoap.model;version=latest
+
+-testpath: \
+	assertj-core;version=latest

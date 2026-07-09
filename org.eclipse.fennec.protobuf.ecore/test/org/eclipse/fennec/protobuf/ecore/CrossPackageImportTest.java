@@ -7,7 +7,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.eclipse.fennec.protobuf;
+package org.eclipse.fennec.protobuf.ecore;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,7 +19,7 @@ import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
-import org.eclipse.fennec.protobuf.ecore.ProtobufImporter;
+import org.eclipse.fennec.protobuf.ProtobufAnnotations;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

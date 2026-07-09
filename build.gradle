@@ -50,6 +50,9 @@ subprojects {
     // Add each utility's core bundle here as it gains plain-JUnit tests.
     def coverageFloorBundles = [
             'org.eclipse.fennec.protobuf',
+            'org.eclipse.fennec.protobuf.ecore',
+            'org.eclipse.fennec.soap',
+            'org.eclipse.fennec.soap.ecore',
     ]
     afterEvaluate {
         if (project.name in coverageFloorBundles) {

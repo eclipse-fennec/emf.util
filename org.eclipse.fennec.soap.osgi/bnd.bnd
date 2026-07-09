@@ -1,0 +1,18 @@
+Bundle-Name: Fennec EMF SOAP OSGi
+Bundle-Description: Registers a SOAP Resource.Factory as an OSGi service for the \
+ Fennec EMF OSGi runtime, bound by file extension / content type.
+
+-library: enableEMF
+
+Export-Package: \
+	org.eclipse.fennec.soap,\
+	org.eclipse.fennec.soap.resource
+	
+Private-Package: \
+	org.eclipse.fennec.soap.osgi
+
+-buildpath: \
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.soap;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api;version=latest

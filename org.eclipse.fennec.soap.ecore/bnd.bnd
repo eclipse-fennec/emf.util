@@ -1,0 +1,14 @@
+Bundle-Name: Fennec EMF SOAP WSDL/XSD Importer
+Bundle-Description: Derives Ecore from a WSDL/XSD (bootstrap/design-time), using EMF's \
+ XSDEcoreBuilder plus a light WSDL operation parse. Kept separate from the SOAP runtime so \
+ the runtime does not depend on the org.eclipse.xsd toolchain.
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.xsd;version=latest,\
+	org.eclipse.fennec.soap;version=snapshot
+
+-testpath: \
+	assertj-core;version=latest,\
+	org.xmlsoap.model;version=latest

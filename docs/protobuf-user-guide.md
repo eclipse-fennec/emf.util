@@ -277,9 +277,10 @@ The annotation provides the default for the plain-Java `writer()`/`reader()`; an
 ## Importing: descriptors → Ecore
 
 For **interop and bootstrapping** — consuming a schema defined elsewhere (a gRPC service,
-another team's `.proto`) as an EMF model — `ProtobufImporter` (package
-`org.eclipse.fennec.protobuf.ecore`) derives dynamic `EPackage`s from **compiled** Protobuf
-descriptors. Text `.proto` is not parsed (protobuf-java has no text parser); compile it first:
+another team's `.proto`) as an EMF model — `ProtobufImporter` derives dynamic `EPackage`s from
+**compiled** Protobuf descriptors. It lives in its **own bundle `org.eclipse.fennec.protobuf.ecore`**
+(package of the same name), separate from the runtime — a bootstrap/design-time step. Text `.proto`
+is not parsed (protobuf-java has no text parser); compile it first:
 
 ```bash
 protoc --include_imports --descriptor_set_out=shop.desc shop.proto

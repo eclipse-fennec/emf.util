@@ -54,6 +54,7 @@ Gradle; the bnd toolchain runs on the **7.4.0 snapshot**.
 | Utility | Status | Description |
 |---|---|---|
 | [EMF ⇄ Protobuf](/guides/protobuf) | v1 | Schema-driven (de)serialization of EMF models to Google Protocol Buffers. |
+| [EMF ⇄ SOAP / WSDL](/guides/soap) | v1 | WSDL/XSD → Ecore import and SOAP 1.1 envelope (de)serialization of EMF models as XML. |
 
 ## Documentation & releases
 
