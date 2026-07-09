@@ -83,6 +83,32 @@ EObjects as its contents:
 Payload types must come from a WSDL/XSD import (so each `EClass` has a global XML element) and
 their `EPackage`s must be registered in the resource set's package registry.
 
+## Calling a service (`SoapServiceClient`)
+
+Beyond framing a payload, you can **invoke** an operation over HTTP. `SoapServiceClient`
+(bundle `org.eclipse.fennec.soap.client`) implements the common
+[`ServiceClient`](/guides/service-clients) API: it builds the envelope via `SoapResource`, POSTs it
+with the JDK `HttpClient`, and unwraps the response `Body` into an `EObject`.
+
+```java
+WsdlModel wsdl = WsdlImporter.fromWsdl(bytes);
+try (SoapServiceClient client = new SoapServiceClient(URI.create("http://host/service"), wsdl)) {
+    SoapOperation getStock = wsdl.operation("GetStock");
+    EObject request = EcoreUtil.create(getStock.requestType());
+    request.eSet(getStock.requestType().getEStructuralFeature("symbol"), "IBM");
+
+    EObject response = client.invoke(getStock, request);   // an instance of getStock.responseType()
+}
+```
+
+- **`SOAPAction`** defaults to empty; set it per operation with `withSoapAction(op -> "…")` (the
+  WSDL binding's `soapAction` is not yet extracted by the importer).
+- An incoming SOAP `Fault` becomes a `ServiceInvocationException`.
+- `unwrap(HttpClient.class)` gives you the native client for auth headers, timeouts, etc.
+
+The bundle depends only on `org.eclipse.fennec.soap` (the runtime) + `…soap.ecore` (the model) — no
+servlet/JAX-RS stack; transport is the JDK `HttpClient`.
+
 ## Requirements & dependencies
 
 - Java 21. The importer lives in its **own bundle `org.eclipse.fennec.soap.ecore`** and needs

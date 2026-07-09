@@ -1,0 +1,17 @@
+Bundle-Name: Fennec EMF SOAP Client
+Bundle-Description: A ServiceClient implementation that invokes SOAP 1.1 operations over HTTP, \
+ reusing the SOAP envelope (de)serialization. Transport via the JDK HttpClient.
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.service.api;version=snapshot,\
+	org.eclipse.fennec.soap;version=snapshot,\
+	org.eclipse.fennec.soap.ecore;version=snapshot,\
+	org.eclipse.emf.ecore.xmi;version=latest,\
+	org.xmlsoap.model;version=latest
+
+-testpath: \
+	assertj-core;version=latest,\
+	org.eclipse.xsd;version=latest

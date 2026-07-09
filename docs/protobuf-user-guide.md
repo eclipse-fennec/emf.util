@@ -312,6 +312,26 @@ It is deliberately **structural**, so a plain `.proto` (which carries no EMF sem
 - **Fennec wrappers** — a Fennec export's `EObjectAny`/`EObjectRef` messages return as ordinary
   `EClass`es (annotation-aware, lossless import is not implemented).
 
+### Services (gRPC)
+
+A `FileDescriptorSet` also carries the `service`/`method` definitions. `importFrom(...)` returns
+them alongside the packages — the raw material for a gRPC client and the
+[service-client](/guides/service-clients) model:
+
+```java
+ProtobufImport imp = ProtobufImporter.importFrom(descriptorSet);
+imp.packages();                       // the data EClasses (as above)
+GrpcService store = imp.service("Store");
+GrpcMethod get = store.method("GetPet");
+get.requestType();   get.responseType();          // resolved to the imported EClasses
+get.fullMethodName();                             // "package.Store/GetPet"
+get.streaming();                                  // UNARY | SERVER_STREAMING | CLIENT_STREAMING | BIDI
+```
+
+This extraction is **decision-neutral**: it is the input both for a future Ecore `EOperation`
+projection and for a DDSR service model. A gRPC **client** (transport) is not yet part of this
+utility — it needs a gRPC/Netty dependency (see the service-clients roadmap).
+
 ## Behavior and guarantees
 
 - **Unset vs. default.** For `unsettable` features, an explicit set-to-default value

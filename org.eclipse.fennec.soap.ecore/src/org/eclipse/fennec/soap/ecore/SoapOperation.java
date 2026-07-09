@@ -12,16 +12,18 @@ package org.eclipse.fennec.soap.ecore;
 import javax.xml.namespace.QName;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.fennec.service.api.ServiceOperation;
 
 /**
  * A WSDL {@code portType} operation, resolved against the imported Ecore: the request
  * and response message elements (as XML {@link QName}s) and the {@link EClass}es they map
  * to. Either {@code EClass} may be {@code null} if the element could not be resolved (e.g.
  * an RPC-style part referencing a type rather than a global element — out of scope for v1).
+ * Implements {@link ServiceOperation} so a {@code ServiceClient} can invoke it uniformly.
  *
  * @see WsdlImporter
  */
-public final class SoapOperation {
+public final class SoapOperation implements ServiceOperation {
 
 	private final String name;
 	private final QName requestElement;

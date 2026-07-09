@@ -7,7 +7,8 @@ Bundle-Description: Derives Ecore from a WSDL/XSD (bootstrap/design-time), using
 
 -buildpath: \
 	org.eclipse.xsd;version=latest,\
-	org.eclipse.fennec.soap;version=snapshot
+	org.eclipse.fennec.soap;version=snapshot,\
+	org.eclipse.fennec.service.api;version=snapshot
 
 -testpath: \
 	assertj-core;version=latest,\

@@ -16,6 +16,7 @@ import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -26,7 +27,7 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Mapping edge cases")
 class MappingEdgeTest {
 
-	private static EAttribute attr(String name, org.eclipse.emf.ecore.EClassifier type) {
+	private static EAttribute attr(String name, EClassifier type) {
 		EAttribute a = EcoreFactory.eINSTANCE.createEAttribute();
 		a.setName(name);
 		a.setEType(type);

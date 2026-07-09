@@ -1,0 +1,8 @@
+Bundle-Name: Fennec EMF Service Client API
+Bundle-Description: Protocol-agnostic client API for invoking modelled service operations \
+ (SOAP/gRPC/REST/OData) uniformly — a ServiceClient over per-protocol implementations.
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest

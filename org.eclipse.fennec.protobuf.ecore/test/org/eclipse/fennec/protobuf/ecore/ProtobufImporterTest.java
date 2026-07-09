@@ -18,6 +18,7 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -105,7 +106,7 @@ class ProtobufImporterTest {
 		return FileDescriptorSet.newBuilder().addFile(proto).build().toByteArray();
 	}
 
-	private static EAttribute attr(EcoreFactory ef, String name, org.eclipse.emf.ecore.EClassifier type) {
+	private static EAttribute attr(EcoreFactory ef, String name, EClassifier type) {
 		EAttribute a = ef.createEAttribute();
 		a.setName(name);
 		a.setEType(type);

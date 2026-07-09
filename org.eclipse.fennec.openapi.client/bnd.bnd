@@ -1,0 +1,24 @@
+Bundle-Name: Fennec EMF OpenAPI Client
+Bundle-Description: A ServiceClient implementation that invokes OpenAPI operations over HTTP: \
+ parameters come from the importer's synthetic request EClass (in= annotations), JSON payloads \
+ are (de)serialized through the Fennec codec. Transport via the JDK HttpClient.
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.service.api;version=snapshot,\
+	org.eclipse.fennec.openapi.ecore;version=snapshot,\
+	org.eclipse.fennec.openapi.model;version=latest,\
+	org.eclipse.fennec.codec;version=latest,\
+	org.eclipse.fennec.codec.api;version=latest,\
+	org.eclipse.fennec.model.metadata;version="[0.1,0.2)"
+
+-testpath: \
+	assertj-core;version=latest,\
+	org.eclipse.fennec.codec.openapi;version=latest,\
+	org.eclipse.fennec.codec.jsonschema;version=latest,\
+	org.eclipse.fennec.codec.metadata;version=latest,\
+	tools.jackson.core.jackson-core;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest

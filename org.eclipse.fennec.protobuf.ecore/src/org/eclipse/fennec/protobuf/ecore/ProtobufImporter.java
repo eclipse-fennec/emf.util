@@ -38,6 +38,8 @@ import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Descriptors.MethodDescriptor;
+import com.google.protobuf.Descriptors.ServiceDescriptor;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 /**
@@ -72,6 +74,7 @@ public final class ProtobufImporter {
 	private final Map<String, EPackage> packages = new LinkedHashMap<>();
 	private final Map<String, EClass> classesByFullName = new HashMap<>();
 	private final Map<String, EEnum> enumsByFullName = new HashMap<>();
+	private final List<GrpcService> services = new ArrayList<>();
 
 	private ProtobufImporter(ImportOptions options) {
 		this.options = options;
@@ -88,13 +91,27 @@ public final class ProtobufImporter {
 	 * every referenced dependency is present, or the build fails with a clear error.
 	 */
 	public static List<EPackage> fromDescriptorSet(byte[] descriptorSet, ImportOptions options) {
+		return importFrom(descriptorSet, options).packages();
+	}
+
+	/** Imports packages <em>and</em> gRPC services from a {@code FileDescriptorSet} (defaults). */
+	public static ProtobufImport importFrom(byte[] descriptorSet) {
+		return importFrom(descriptorSet, ImportOptions.defaults());
+	}
+
+	/**
+	 * Imports packages <em>and</em> gRPC services from a {@code FileDescriptorSet}. The services
+	 * are the {@code service}/{@code method} definitions resolved to the imported request/response
+	 * {@link EClass}es — decision-neutral raw material for a later {@code EOperation}/DDSR projection.
+	 */
+	public static ProtobufImport importFrom(byte[] descriptorSet, ImportOptions options) {
 		if (descriptorSet == null) {
 			throw new IllegalArgumentException("descriptorSet must not be null");
 		}
 		return new ProtobufImporter(options == null ? ImportOptions.defaults() : options).run(descriptorSet);
 	}
 
-	private List<EPackage> run(byte[] descriptorSet) {
+	private ProtobufImport run(byte[] descriptorSet) {
 		FileDescriptorSet set;
 		try {
 			set = FileDescriptorSet.parseFrom(descriptorSet);
@@ -103,14 +120,34 @@ public final class ProtobufImporter {
 		}
 		Map<String, FileDescriptor> files = buildFiles(set);
 		// Two passes so cross-file / cross-package type references resolve: declare all
-		// classifiers first, then wire fields.
+		// classifiers first, then wire fields; services last (need the resolved EClasses).
 		for (FileDescriptor file : files.values()) {
 			declare(file);
 		}
 		for (FileDescriptor file : files.values()) {
 			wire(file);
 		}
-		return new ArrayList<>(packages.values());
+		for (FileDescriptor file : files.values()) {
+			extractServices(file);
+		}
+		return new ProtobufImport(new ArrayList<>(packages.values()), services);
+	}
+
+	/** Extracts the {@code service}/{@code method} definitions, resolving input/output to imported EClasses. */
+	private void extractServices(FileDescriptor file) {
+		for (ServiceDescriptor service : file.getServices()) {
+			List<GrpcMethod> methods = new ArrayList<>();
+			for (MethodDescriptor method : service.getMethods()) {
+				methods.add(new GrpcMethod(
+						method.getName(),
+						service.getFullName() + "/" + method.getName(),
+						classesByFullName.get(method.getInputType().getFullName()),
+						classesByFullName.get(method.getOutputType().getFullName()),
+						method.isClientStreaming(),
+						method.isServerStreaming()));
+			}
+			services.add(new GrpcService(service.getName(), service.getFullName(), methods));
+		}
 	}
 
 	// --- descriptor resolution -------------------------------------------------------------

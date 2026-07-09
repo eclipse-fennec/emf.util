@@ -19,10 +19,11 @@ subprojects {
         mavenCentral()
     }
     // Allow gradle to enable JUnit support in submodules
-    // Exclude @Tag("perf") tests from normal builds — run via perfTest task
+    // Exclude @Tag("perf") (slow) and @Tag("remote") (needs internet) tests from normal
+    // builds — run via the perfTest / remoteTest tasks.
     test {
         useJUnitPlatform {
-            excludeTags 'perf'
+            excludeTags 'perf', 'remote'
         }
     }
 
@@ -32,6 +33,15 @@ subprojects {
     tasks.register('perfTest', Test) {
         useJUnitPlatform {
             includeTags 'perf'
+        }
+    }
+
+    // Dedicated task for tests against PUBLIC endpoints (@Tag("remote")): they validate the
+    // service-client design against real services but depend on internet + third-party uptime,
+    // so they never gate the normal build. Run explicitly: ./gradlew remoteTest
+    tasks.register('remoteTest', Test) {
+        useJUnitPlatform {
+            includeTags 'remote'
         }
     }
 
@@ -53,6 +63,9 @@ subprojects {
             'org.eclipse.fennec.protobuf.ecore',
             'org.eclipse.fennec.soap',
             'org.eclipse.fennec.soap.ecore',
+            'org.eclipse.fennec.soap.client',
+            'org.eclipse.fennec.openapi.ecore',
+            'org.eclipse.fennec.openapi.client',
     ]
     afterEvaluate {
         if (project.name in coverageFloorBundles) {

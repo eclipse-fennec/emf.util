@@ -1,0 +1,24 @@
+Bundle-Name: Fennec EMF OpenAPI Importer
+Bundle-Description: Derives service operations from an OpenAPI document (bootstrap/design-time): \
+ the data EClasses come from the Fennec codec's OpenAPI/JSON-Schema pipeline; this bundle links \
+ the path operations to those EClasses (incl. a synthetic request EClass folding path/query/header \
+ parameters + body), mirroring the SOAP/gRPC importers.
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.service.api;version=snapshot,\
+	org.eclipse.fennec.openapi.model;version=latest,\
+	org.eclipse.fennec.codec.openapi;version=latest,\
+	org.eclipse.fennec.codec;version=latest
+
+-testpath: \
+	assertj-core;version=latest,\
+	org.eclipse.fennec.codec.api;version=latest,\
+	org.eclipse.fennec.codec.jsonschema;version=latest,\
+	org.eclipse.fennec.codec.metadata;version=latest,\
+	org.eclipse.fennec.model.metadata;version="[0.1,0.2)",\
+	tools.jackson.core.jackson-core;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest
