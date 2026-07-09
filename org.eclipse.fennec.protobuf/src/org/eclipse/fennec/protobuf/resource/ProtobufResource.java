@@ -16,14 +16,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.common.util.URI;
-import org.eclipse.emf.ecore.EClass;
-import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceImpl;
 import org.eclipse.fennec.protobuf.ProtobufContext;
 import org.eclipse.fennec.protobuf.ProtobufException;
+import org.eclipse.fennec.protobuf.ProtobufReader;
 import org.eclipse.fennec.protobuf.ProtobufSchema;
 import org.eclipse.fennec.protobuf.ProtobufSchemaCache;
 import org.eclipse.fennec.protobuf.ProtobufTypeStrategy;
@@ -82,14 +81,12 @@ public class ProtobufResource extends ResourceImpl {
 			List<EObject> roots = getContents();
 			out.writeInt32NoTag(roots.size());
 			for (EObject root : roots) {
-				EClass eClass = root.eClass();
-				EPackage ePackage = eClass.getEPackage();
+				EPackage ePackage = root.eClass().getEPackage();
 				if (ePackage == null || ePackage.getNsURI() == null) {
-					throw new ProtobufException("Root object of type " + eClass.getName()
+					throw new ProtobufException("Root object of type " + root.eClass().getName()
 							+ " has no registered EPackage / nsURI");
 				}
-				out.writeStringNoTag(ePackage.getNsURI());
-				out.writeStringNoTag(eClass.getName());
+				// Each root is written as its own self-describing frame (nsURI + EClass name + payload).
 				out.writeByteArrayNoTag(cache.get(ePackage).writer(ctx).toBytes(root));
 			}
 			out.flush();
@@ -109,11 +106,9 @@ public class ProtobufResource extends ResourceImpl {
 				throw new ProtobufException("Corrupt Protobuf resource: negative root count " + count);
 			}
 			for (int i = 0; i < count; i++) {
-				String nsURI = in.readString();
-				String className = in.readString();
-				byte[] bytes = in.readByteArray();
-				EClass eClass = resolve(nsURI, className);
-				getContents().add(cache.get(eClass.getEPackage()).reader(ctx).fromBytes(bytes, eClass));
+				byte[] frame = in.readByteArray();
+				// The frame carries its own type (nsURI + EClass name); resolved via the package registry.
+				getContents().add(ProtobufReader.readSelfDescribing(frame, ctx));
 			}
 		} catch (RuntimeException e) {
 			throw record("load", e);
@@ -153,20 +148,5 @@ public class ProtobufResource extends ResourceImpl {
 	private ProtobufSchemaCache cache(Map<?, ?> options) {
 		Object shared = options == null ? null : options.get(OPTION_SCHEMA_CACHE);
 		return shared instanceof ProtobufSchemaCache c ? c : localCache;
-	}
-
-	private EClass resolve(String nsURI, String className) {
-		ResourceSet rs = getResourceSet();
-		EPackage.Registry registry = rs != null ? rs.getPackageRegistry() : EPackage.Registry.INSTANCE;
-		EPackage ePackage = registry.getEPackage(nsURI);
-		if (ePackage == null) {
-			throw new ProtobufException("No EPackage registered for nsURI " + nsURI
-					+ " (register it in the ResourceSet's package registry before loading)");
-		}
-		EClassifier classifier = ePackage.getEClassifier(className);
-		if (!(classifier instanceof EClass eClass)) {
-			throw new ProtobufException("No EClass '" + className + "' in package " + nsURI);
-		}
-		return eClass;
 	}
 }

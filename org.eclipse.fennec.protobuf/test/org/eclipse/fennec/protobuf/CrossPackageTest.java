@@ -59,7 +59,7 @@ class CrossPackageTest {
 	private static EObject roundTrip(EObject source, ProtobufContext ctx) {
 		ProtobufSchema schema = ProtobufSchema.forPackage(source.eClass().getEPackage());
 		byte[] bytes = schema.writer(ctx).toBytes(source);
-		return schema.reader(ctx).fromBytes(bytes, source.eClass());
+		return schema.reader(ctx).fromBytes(bytes);
 	}
 
 	@Test

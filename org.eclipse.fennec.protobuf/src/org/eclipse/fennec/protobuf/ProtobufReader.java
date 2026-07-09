@@ -25,6 +25,7 @@ import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
@@ -32,8 +33,10 @@ import com.google.protobuf.InvalidProtocolBufferException;
 
 /**
  * Deserializes Protobuf wire bytes back into EMF objects using a {@link ProtobufSchema}
- * and a {@link ProtobufContext}. The root {@link EClass} is supplied by the caller;
- * wrapped (polymorphic / cross-package / {@code EObject}) objects carry a type
+ * and a {@link ProtobufContext}. The root type is read from the self-describing frame
+ * ({@link #fromBytes(byte[])}); {@link #fromBareBytes(byte[], EClass)} instead takes the
+ * root {@link EClass} for a bare message. Wrapped (polymorphic / cross-package /
+ * {@code EObject}) objects carry a type
  * discriminator that is resolved — strategy-agnostically — via the context's package
  * registry, and their bytes are parsed against their own package's schema. Non-containment
  * references become proxies carrying the (resource-relative-resolved) target URI.
@@ -48,8 +51,41 @@ public final class ProtobufReader {
 		this.context = context;
 	}
 
-	/** Parses {@code data} as an instance of {@code eClass}. */
-	public EObject fromBytes(byte[] data, EClass eClass) {
+	/**
+	 * Parses a <b>self-describing</b> frame (as produced by {@link ProtobufWriter#toBytes(EObject)}):
+	 * the leading {@code EPackage} nsURI + {@link EClass} name carry the root type, so no type has to
+	 * be supplied. The type is resolved against this reader's own package first, then the context's
+	 * {@link org.eclipse.emf.ecore.EPackage.Registry}. Use {@link #fromBareBytes(byte[], EClass)} for
+	 * a bare message whose type is known up front.
+	 */
+	public EObject fromBytes(byte[] data) {
+		try {
+			return readFramed(CodedInputStream.newInstance(data), context, schema);
+		} catch (IOException e) {
+			throw new ProtobufException("Could not parse self-describing protobuf bytes", e);
+		}
+	}
+
+	/** Parses a self-describing frame from a stream (see {@link #fromBytes(byte[])}). */
+	public EObject read(InputStream in) throws IOException {
+		return readFramed(CodedInputStream.newInstance(in), context, schema);
+	}
+
+	/**
+	 * Parses a self-describing frame using only a {@link ProtobufContext} — for callers (e.g. a
+	 * {@code Resource}) that hold no bound schema because the root package is unknown until the
+	 * frame is read. The root type is resolved via the context's package registry.
+	 */
+	public static EObject readSelfDescribing(byte[] data, ProtobufContext context) {
+		try {
+			return readFramed(CodedInputStream.newInstance(data), context, null);
+		} catch (IOException e) {
+			throw new ProtobufException("Could not parse self-describing protobuf bytes", e);
+		}
+	}
+
+	/** Parses {@code data} as an instance of {@code eClass} (bare message, no type frame). */
+	public EObject fromBareBytes(byte[] data, EClass eClass) {
 		try {
 			return read(DynamicMessage.parseFrom(schema.descriptorFor(eClass), data), eClass);
 		} catch (InvalidProtocolBufferException e) {
@@ -57,9 +93,28 @@ public final class ProtobufReader {
 		}
 	}
 
-	/** Parses a stream as an instance of {@code eClass}. */
-	public EObject read(InputStream in, EClass eClass) throws IOException {
+	/** Parses a stream as an instance of {@code eClass} (bare message, no type frame). */
+	public EObject readBare(InputStream in, EClass eClass) throws IOException {
 		return read(DynamicMessage.parseFrom(schema.descriptorFor(eClass), in), eClass);
+	}
+
+	/**
+	 * Reads a self-describing frame ({@code nsURI}, {@code className}, bare payload) and delegates
+	 * to the resolved type's own package schema. When {@code local} is given its package is preferred
+	 * for resolution (so a package need not be globally registered); otherwise the context registry is used.
+	 */
+	private static EObject readFramed(CodedInputStream in, ProtobufContext context, ProtobufSchema local)
+			throws IOException {
+		String nsURI = in.readString();
+		String className = in.readString();
+		byte[] payload = in.readByteArray();
+		EClass eClass = local != null && nsURI.equals(local.ePackage().getNsURI())
+				? local.eClassByName(className)
+				: context.resolveRoot(nsURI, className);
+		ProtobufSchema target = local != null && eClass.getEPackage() == local.ePackage()
+				? local
+				: context.schemaFor(eClass.getEPackage());
+		return target.reader(context).fromBareBytes(payload, eClass);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -127,7 +182,7 @@ public final class ProtobufReader {
 		String discriminator = (String) msg.getField(anyDesc.findFieldByName(ProtobufSchema.FIELD_ECLASS));
 		ByteString data = (ByteString) msg.getField(anyDesc.findFieldByName(ProtobufSchema.FIELD_DATA));
 		EClass actual = context.resolveType(discriminator, declared);
-		return schemaFor(actual.getEPackage()).reader(context).fromBytes(data.toByteArray(), actual);
+		return schemaFor(actual.getEPackage()).reader(context).fromBareBytes(data.toByteArray(), actual);
 	}
 
 	private EObject readReferenceValue(Object value, EClass declared, boolean isMessage) {

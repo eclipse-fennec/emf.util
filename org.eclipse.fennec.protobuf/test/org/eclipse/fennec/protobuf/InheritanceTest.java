@@ -35,7 +35,7 @@ class InheritanceTest {
 
 	private EObject roundTrip(EObject source) {
 		byte[] bytes = schema.writer().toBytes(source);
-		return schema.reader().fromBytes(bytes, source.eClass());
+		return schema.reader().fromBytes(bytes);
 	}
 
 	@Test

@@ -50,7 +50,7 @@ class TypeStrategyTest {
 	}
 
 	private void assertRoundTrips(byte[] bytes) {
-		EObject read = schema.reader(readCtx).fromBytes(bytes, model.shelter);
+		EObject read = schema.reader(readCtx).fromBytes(bytes);
 		@SuppressWarnings("unchecked")
 		List<EObject> animals = (List<EObject>) read.eGet(model.shelterAnimals);
 		assertThat(animals).hasSize(1);

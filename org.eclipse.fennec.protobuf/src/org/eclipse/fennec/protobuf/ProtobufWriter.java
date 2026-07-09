@@ -9,6 +9,7 @@
  */
 package org.eclipse.fennec.protobuf;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
@@ -23,6 +24,7 @@ import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
@@ -49,14 +51,37 @@ public final class ProtobufWriter {
 		this.context = context;
 	}
 
-	/** Serializes {@code object} to a fresh byte array. */
+	/**
+	 * Serializes {@code object} to a fresh byte array as a <b>self-describing</b> frame:
+	 * the object's {@code EPackage} nsURI and {@link EClass} name precede its Protobuf
+	 * payload, so it can be read back with {@link ProtobufReader#fromBytes(byte[])}
+	 * without knowing the type up front. Use {@link #toBareBytes(EObject)} for the bare
+	 * message (no type frame).
+	 */
 	public byte[] toBytes(EObject object) {
-		return build(object).toByteArray();
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+		try {
+			write(object, buffer);
+		} catch (IOException e) {
+			throw new ProtobufException("Could not serialize "
+					+ (object == null ? "null" : object.eClass().getName()), e);
+		}
+		return buffer.toByteArray();
 	}
 
-	/** Serializes {@code object} to a stream. */
+	/** Serializes {@code object} to a stream as a self-describing frame (see {@link #toBytes(EObject)}). */
 	public void write(EObject object, OutputStream out) throws IOException {
-		build(object).writeTo(out);
+		EClass eClass = requirePackaged(object);
+		CodedOutputStream coded = CodedOutputStream.newInstance(out);
+		coded.writeStringNoTag(eClass.getEPackage().getNsURI());
+		coded.writeStringNoTag(eClass.getName());
+		coded.writeByteArrayNoTag(toBareBytes(object));
+		coded.flush();
+	}
+
+	/** Serializes {@code object} to a bare Protobuf message (no type frame); the reader must know the type. */
+	public byte[] toBareBytes(EObject object) {
+		return build(object).toByteArray();
 	}
 
 	/** Serializes {@code object} to a {@link DynamicMessage} using its own class descriptor. */
@@ -65,6 +90,20 @@ public final class ProtobufWriter {
 			throw new IllegalArgumentException("object must not be null");
 		}
 		return build(object, schema.descriptorFor(object.eClass()));
+	}
+
+	/** Ensures {@code object} is non-null and carries a resolvable {@code EPackage} nsURI for the type frame. */
+	private static EClass requirePackaged(EObject object) {
+		if (object == null) {
+			throw new IllegalArgumentException("object must not be null");
+		}
+		EClass eClass = object.eClass();
+		EPackage ePackage = eClass.getEPackage();
+		if (ePackage == null || ePackage.getNsURI() == null) {
+			throw new ProtobufException("Object of type " + eClass.getName()
+					+ " has no registered EPackage / nsURI");
+		}
+		return eClass;
 	}
 
 	private DynamicMessage build(EObject object, Descriptor descriptor) {

@@ -57,7 +57,7 @@ class MappingEdgeTest {
 		EObject n = pkg.getEFactoryInstance().create(node);
 		n.eSet(name, "keep");
 		n.eSet(cache, "runtime-only");
-		EObject read = schema.reader().fromBytes(schema.writer().toBytes(n), node);
+		EObject read = schema.reader().fromBytes(schema.writer().toBytes(n));
 
 		assertThat(read.eGet(name)).isEqualTo("keep");
 		assertThat(read.eIsSet(cache)).isFalse();
@@ -125,7 +125,7 @@ class MappingEdgeTest {
 		EObject n = pkg.getEFactoryInstance().create(node);
 		n.eSet(name, "n");
 		n.eSet(secret, "hidden");
-		EObject read = schema.reader().fromBytes(schema.writer().toBytes(n), node);
+		EObject read = schema.reader().fromBytes(schema.writer().toBytes(n));
 		assertThat(read.eIsSet(secret)).isFalse();
 	}
 
@@ -151,7 +151,7 @@ class MappingEdgeTest {
 
 		EObject n = pkg.getEFactoryInstance().create(node);
 		n.eSet(cache, "forced");
-		EObject read = schema.reader().fromBytes(schema.writer().toBytes(n), node);
+		EObject read = schema.reader().fromBytes(schema.writer().toBytes(n));
 		assertThat(read.eGet(cache)).isEqualTo("forced");
 	}
 }

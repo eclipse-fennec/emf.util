@@ -10,6 +10,7 @@
 package org.eclipse.fennec.protobuf;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 
@@ -91,5 +92,25 @@ public final class ProtobufContext {
 	/** Resolves a type discriminator back to a concrete {@link EClass}. */
 	EClass resolveType(String discriminator, EClass declared) {
 		return ProtobufType.decode(discriminator, declared, packageRegistry);
+	}
+
+	/**
+	 * Resolves the root type of a self-describing frame (its {@code EPackage} nsURI +
+	 * {@link EClass} name) via the {@link EPackage.Registry}. Unlike
+	 * {@link #resolveType(String, EClass)} this needs no declared fallback — the frame
+	 * carries the package identity — so it works for a top-level object whose type is
+	 * unknown up front.
+	 */
+	EClass resolveRoot(String nsURI, String className) {
+		EPackage ePackage = packageRegistry.getEPackage(nsURI);
+		if (ePackage == null) {
+			throw new ProtobufException("No EPackage registered for nsURI " + nsURI
+					+ " (register it in the package registry before reading)");
+		}
+		EClassifier classifier = ePackage.getEClassifier(className);
+		if (!(classifier instanceof EClass eClass)) {
+			throw new ProtobufException("No EClass '" + className + "' in package " + nsURI);
+		}
+		return eClass;
 	}
 }

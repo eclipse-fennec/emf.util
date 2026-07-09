@@ -80,7 +80,7 @@ class EnumMappingTest {
 		t.eSet(level, pkg.getEFactoryInstance().createFromString(priority, "HIGH"));
 
 		byte[] bytes = schema.writer().toBytes(t);
-		EObject read = schema.reader().fromBytes(bytes, task);
+		EObject read = schema.reader().fromBytes(bytes);
 
 		assertThat(pkg.getEFactoryInstance().convertToString(priority, read.eGet(level))).isEqualTo("HIGH");
 	}
