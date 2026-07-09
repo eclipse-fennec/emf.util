@@ -4,6 +4,7 @@ Bundle-Description: Schema-driven (de)serialization of EMF models to Google Prot
 
 Export-Package: \
 	org.eclipse.fennec.protobuf,\
+	org.eclipse.fennec.protobuf.ecore,\
 	org.eclipse.fennec.protobuf.resource
 
 -library: enableEMF

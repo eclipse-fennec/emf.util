@@ -11,6 +11,8 @@ API.
 
 - **Input:** any Ecore model (generated *or* dynamic).
 - **Output:** compact binary Protobuf, plus an optional `.proto` (proto3) schema export.
+- **Import:** derive a (structural) Ecore model from a compiled `FileDescriptorSet` — see
+  [Importing: descriptors → Ecore](#importing-descriptors-ecore).
 - **Round-trips:** attributes, enums, containment, references, and inheritance/polymorphism.
 
 ## Quick start
@@ -272,6 +274,43 @@ resourceSet.getSaveOptions().put(ProtobufResource.OPTION_SCHEMA_CACHE, cache);
 The annotation provides the default for the plain-Java `writer()`/`reader()`; an explicit
 `ProtobufContext` or `Resource` option overrides it.
 
+## Importing: descriptors → Ecore
+
+For **interop and bootstrapping** — consuming a schema defined elsewhere (a gRPC service,
+another team's `.proto`) as an EMF model — `ProtobufImporter` (package
+`org.eclipse.fennec.protobuf.ecore`) derives dynamic `EPackage`s from **compiled** Protobuf
+descriptors. Text `.proto` is not parsed (protobuf-java has no text parser); compile it first:
+
+```bash
+protoc --include_imports --descriptor_set_out=shop.desc shop.proto
+```
+
+```java
+byte[] descriptorSet = Files.readAllBytes(Path.of("shop.desc"));
+List<EPackage> packages = ProtobufImporter.fromDescriptorSet(descriptorSet);
+// register / save as .ecore, or feed to a ResourceSet
+```
+
+Options (`ProtobufImporter.fromDescriptorSet(bytes, ImportOptions.defaults()…)`): `withNsUri`
+(proto package → nsURI; default `http://<package>`), `withFieldNumberAnnotations` (default on),
+`withCamelCaseNames` (default off — proto names kept verbatim).
+
+The mapping is one `EPackage` **per proto package**; messages → `EClass`, enums → `EEnum`,
+`repeated` → `isMany`, proto3 `optional` → `unsettable`, `map<k,v>` → a containment reference
+to the synthetic entry `EClass`. Field numbers are re-pinned as `fieldNumber` annotations, so a
+later [export](#quick-start) stays wire-stable.
+
+It is deliberately **structural**, so a plain `.proto` (which carries no EMF semantics) loses:
+
+- **inheritance** — proto3 has none, so every `EClass` is flat;
+- **reference semantics** — every message-typed field becomes a *containment* `EReference`
+  (no non-containment / URI / proxy distinction to recover);
+- **attribute precision** — `int32`/`string` cannot be re-widened to the `short`/`char`/
+  `BigDecimal`/date/custom types a forward export collapsed into them; `uint64`/`fixed64` → `ELong`
+  (may overflow above `Long.MAX_VALUE`);
+- **Fennec wrappers** — a Fennec export's `EObjectAny`/`EObjectRef` messages return as ordinary
+  `EClass`es (annotation-aware, lossless import is not implemented).
+
 ## Behavior and guarantees
 
 - **Unset vs. default.** For `unsettable` features, an explicit set-to-default value
@@ -289,8 +328,9 @@ The annotation provides the default for the plain-Java `writer()`/`reader()`; an
 - **`.proto` export fidelity.** Wrapped (polymorphic / cross-package / `EObject`) references
   appear as the `EObjectAny`/`EObjectRef` wrapper rather than an imported message type.
 - **Not yet supported:** `FeatureMap`/mixed-content features; `EJavaObject` and custom data
-  types without symmetric `convertToString`/`createFromString`; importing hand-written
-  `.proto` schema into Ecore (the runtime has no `.proto` text parser).
+  types without symmetric `convertToString`/`createFromString`; parsing hand-written `.proto`
+  *text* (the runtime has no text parser — compile to a `FileDescriptorSet` first and use
+  [`ProtobufImporter`](#importing-descriptors-ecore)).
 - **Field-number stability** requires pinning (see [Field numbers](#field-numbers)).
 
 ## Relationship to Fennec Codec

@@ -9,8 +9,10 @@
  */
 package org.eclipse.fennec.protobuf;
 
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EModelElement;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EcoreFactory;
 
 /**
  * The Ecore {@code EAnnotation} contract for the EMF↔Protobuf mapping. A single
@@ -76,6 +78,22 @@ public final class ProtobufAnnotations {
 		}
 	}
 
+	/**
+	 * Pins the (wire-stable) protobuf field number on a feature, creating the mapping
+	 * {@link EAnnotation} if needed. The inverse of {@link #explicitFieldNumber} — used
+	 * when deriving an Ecore model from Protobuf descriptors so a later export keeps the
+	 * original field numbers.
+	 *
+	 * @throws ProtobufException if {@code number} is not a positive integer
+	 */
+	public static void setFieldNumber(EStructuralFeature feature, int number) {
+		if (number < 1) {
+			throw new ProtobufException("Invalid " + KEY_FIELD_NUMBER + " " + number
+					+ " on feature " + feature.getName() + " (expected a positive integer)");
+		}
+		annotation(feature).getDetails().put(KEY_FIELD_NUMBER, Integer.toString(number));
+	}
+
 	/** Whether the feature is represented by a protobuf field at all. */
 	public static boolean describes(EStructuralFeature f) {
 		if (flag(f, KEY_IGNORE)) {
@@ -113,6 +131,17 @@ public final class ProtobufAnnotations {
 
 	private static boolean flag(EModelElement element, String key) {
 		return Boolean.parseBoolean(detail(element, key));
+	}
+
+	/** Returns the mapping annotation on {@code element}, creating (and attaching) it if absent. */
+	private static EAnnotation annotation(EModelElement element) {
+		EAnnotation a = element.getEAnnotation(SOURCE);
+		if (a == null) {
+			a = EcoreFactory.eINSTANCE.createEAnnotation();
+			a.setSource(SOURCE);
+			element.getEAnnotations().add(a);
+		}
+		return a;
 	}
 
 	static String detail(EModelElement element, String key) {
