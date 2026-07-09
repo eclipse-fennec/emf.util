@@ -7,7 +7,9 @@
 	bnd.identity;id='org.eclipse.fennec.protobuf.ecore',\
 	bnd.identity;id='org.eclipse.fennec.soap',\
 	bnd.identity;id='org.eclipse.fennec.soap.osgi',\
-	bnd.identity;id='org.eclipse.fennec.soap.ecore'
+	bnd.identity;id='org.eclipse.fennec.soap.ecore',\
+	bnd.identity;id='org.eclipse.fennec.openapi.client',\
+	bnd.identity;id='org.eclipse.fennec.openapi.ecore'
 
 -runbundles: \
 	org.eclipse.fennec.protobuf;version=snapshot,\
@@ -28,4 +30,18 @@
 	org.xmlsoap.model;version='[1.1.0,1.1.1)',\
 	org.eclipse.fennec.protobuf.ecore;version=snapshot,\
 	org.eclipse.fennec.soap.ecore;version=snapshot,\
-	org.eclipse.xsd;version='[2.22.0,2.22.1)'
+	org.eclipse.xsd;version='[2.22.0,2.22.1)',\
+	com.fasterxml.jackson.core.jackson-annotations;version='[2.21.0,2.21.1)',\
+	org.eclipse.fennec.codec;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.codec.api;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.codec.jsonschema;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.codec.metadata;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.codec.openapi;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.model.metadata;version='[1.0.0,1.0.1)',\
+	org.eclipse.fennec.model.metadata.api;version='[1.0.0,1.0.1)',\
+	org.eclipse.fennec.openapi.client;version=snapshot,\
+	org.eclipse.fennec.openapi.ecore;version=snapshot,\
+	org.eclipse.fennec.openapi.model;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.service.api;version=snapshot,\
+	tools.jackson.core.jackson-core;version='[3.1.0,3.1.1)',\
+	tools.jackson.core.jackson-databind;version='[3.1.0,3.1.1)'
