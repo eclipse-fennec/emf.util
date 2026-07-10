@@ -1,6 +1,6 @@
 # Service clients
 
-> **Status: v1.** Implemented and tested for SOAP and OpenAPI/REST; the API may still evolve.
+> **Status: v1.** Implemented and tested for SOAP, OpenAPI/REST and gRPC; the API may still evolve.
 
 The importers turn a WSDL / OpenAPI / Protobuf descriptor into Ecore **and** a list of callable
 **operations**. A `ServiceClient` then *invokes* those operations over the wire — with the same
@@ -41,8 +41,37 @@ Protobuf message, the JSON codec — so the client is just discovery + transport
 |---|---|---|---|
 | SOAP 1.1 (WSDL) | `WsdlImporter` → `SoapOperation` | `SoapServiceClient` | [SOAP](/guides/soap) |
 | OpenAPI 3 (REST) | `OpenApiImporter` → `OpenApiOperation` | `OpenApiServiceClient` | [OpenAPI](/guides/openapi) |
-| Protobuf / gRPC | `ProtobufImporter` → `GrpcService`/`GrpcMethod` | *planned* | [Protobuf](/guides/protobuf) |
+| Protobuf / gRPC | `ProtobufImporter` → `GrpcService`/`GrpcMethod` | `GrpcServiceClient` | [Protobuf](/guides/protobuf) |
 | OData | *planned* | *planned* | — |
+
+### gRPC (`org.eclipse.fennec.grpc`)
+
+`GrpcServiceClient` invokes the imported `GrpcMethod`s over an `io.grpc` `Channel` — the
+request/response `EObject`s travel as **bare Protobuf messages**, (de)serialized by the Fennec
+Protobuf runtime against the imported `EPackage`s (no `protoc`, no generated stubs):
+
+```java
+ProtobufImport model = ProtobufImporter.importFrom(descriptorSetBytes); // protoc --descriptor_set_out
+ManagedChannel channel = NettyChannelBuilder.forAddress("host", 50051).usePlaintext().build();
+try (GrpcServiceClient client = new GrpcServiceClient(channel, model)) {
+    EObject reply = client.invoke("greet.Greeter/Greet", request);  // or the simple method name
+}
+```
+
+- Lookup by **full method name** (`pkg.Service/Method`) or simple name (first service wins on a
+  collision). `withDeadline(Duration)` applies a per-call deadline; `close()` shuts the channel
+  down when it is a `ManagedChannel`.
+- A gRPC error status becomes a `ServiceInvocationException` carrying the status code.
+- v1 is **unary only**; streaming methods are rejected with a clear error — `unwrap(Channel.class)`
+  for hand-rolled streaming calls.
+- The transport is the caller's choice: the bundle only needs `grpc-api`/`grpc-stub`. At OSGi
+  runtime the `io.grpc` packages come from the gecko `io.grpc.core`/`io.grpc.netty` wrap bundles
+  (grpc-java ships no OSGi metadata upstream).
+
+The bundle also contains the **server side**: `GrpcServiceServer` builds a transport-agnostic
+`ServerServiceDefinition` for an imported service from plain `EObject -> EObject` handlers —
+add it to a `NettyServerBuilder` (or the in-process transport for tests). See the
+[gRPC examples](/examples/grpc) for the full round-trip.
 
 ## Two consumer modes
 
@@ -56,8 +85,8 @@ Protobuf message, the JSON codec — so the client is just discovery + transport
 
 ## Scope / limitations (v1)
 
-- **Request-response only.** Streaming / publish-subscribe (gRPC server-streaming, SSE, OData
-  delta) are not modelled yet — use `unwrap(...)` for those.
+- **Request-response only.** Streaming / publish-subscribe (gRPC server/client/bidi streaming,
+  SSE, OData delta) are not modelled yet — use `unwrap(...)` for those.
 - **One request `EObject`** per call (a body, or a synthetic request folding parameters — see the
   OpenAPI guide). Multi-part / multi-response shapes are out of scope.
 - The clients are **plain-Java** (JDK `HttpClient`); an OSGi/`@Reference`-based typed variant is on

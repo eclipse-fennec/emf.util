@@ -12,6 +12,40 @@ jakarta.json:jakarta.json-api:2.1.3
 # Google Protocol Buffers (EMF <-> Protobuf utility). The jar ships OSGi metadata.
 com.google.protobuf:protobuf-java:4.35.1
 
+# OSGi-fied grpc: the gecko wrap bundles (io.grpc.core merges api/core/stub/protobuf/
+# protobuf-lite/util — io.grpc is a split package upstream; io.grpc.netty is the unshaded
+# transport over the official io.netty bundles). These are what resolves at OSGi runtime.
+org.geckoprojects.libraries:io.grpc.core:1.82.2-SNAPSHOT
+org.geckoprojects.libraries:io.grpc.netty:1.82.2-SNAPSHOT
+
+# grpc-java for the gRPC client (build/test only — the upstream jars carry NO OSGi metadata).
+# grpc-inprocess/-core/-util + guava/perfmark are the in-process test-runtime closure.
+io.grpc:grpc-api:1.82.2
+io.grpc:grpc-stub:1.82.2
+io.grpc:grpc-core:1.82.2
+io.grpc:grpc-util:1.82.2
+io.grpc:grpc-inprocess:1.82.2
+io.grpc:grpc-context:1.82.2
+io.grpc:grpc-netty:1.82.2
+io.perfmark:perfmark-api:0.27.0
+com.google.guava:guava:33.6.0-jre
+com.google.guava:failureaccess:1.0.3
+com.google.errorprone:error_prone_annotations:2.50.0
+com.google.code.gson:gson:2.14.0
+com.google.code.findbugs:jsr305:3.0.2
+# netty for the grpc-netty test transport (the official jars ARE OSGi bundles)
+io.netty:netty-buffer:4.1.133.Final
+io.netty:netty-codec:4.1.133.Final
+io.netty:netty-codec-http:4.1.133.Final
+io.netty:netty-codec-http2:4.1.133.Final
+io.netty:netty-codec-socks:4.1.133.Final
+io.netty:netty-common:4.1.133.Final
+io.netty:netty-handler:4.1.133.Final
+io.netty:netty-handler-proxy:4.1.133.Final
+io.netty:netty-resolver:4.1.133.Final
+io.netty:netty-transport:4.1.133.Final
+io.netty:netty-transport-native-unix-common:4.1.133.Final
+
 # EMF XSD model + XSDEcoreBuilder (WSDL/XSD -> Ecore for the SOAP utility). Ships OSGi
 # metadata; requires org.eclipse.emf.ecore [2.41,3.0) — aligned with the workspace EMF.
 org.eclipse.emf:org.eclipse.xsd:2.22.0

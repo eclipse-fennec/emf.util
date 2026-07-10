@@ -6,7 +6,8 @@ Bundle-Description: Derives Ecore from a compiled Protobuf FileDescriptorSet \
 
 -buildpath: \
 	com.google.protobuf;version=latest,\
-	org.eclipse.fennec.protobuf;version=snapshot
+	org.eclipse.fennec.protobuf;version=snapshot,\
+	org.eclipse.fennec.service.api;version=snapshot
 
 -testpath: \
 	assertj-core;version=latest

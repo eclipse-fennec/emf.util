@@ -17,4 +17,5 @@ export const GUIDES = [
 
 export const EXAMPLES = [
   { file: 'protobuf-examples.md', slug: 'protobuf', title: 'EMF ⇄ Protobuf' },
+  { file: 'grpc-examples.md', slug: 'grpc', title: 'EMF ⇄ gRPC' },
 ];

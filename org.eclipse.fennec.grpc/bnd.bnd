@@ -1,0 +1,42 @@
+Bundle-Name: Fennec EMF gRPC
+Bundle-Description: gRPC client and server for EMF: a ServiceClient that invokes gRPC methods \
+ over an io.grpc Channel, and a server-definition builder that serves GrpcMethods from plain \
+ handlers — both marshalling EObjects as bare Protobuf messages via the Fennec Protobuf runtime \
+ (no protoc, no generated stubs). Operations come from the Protobuf descriptor importer \
+ (GrpcService/GrpcMethod). v1 supports unary calls; the transport (Netty, in-process, ...) is \
+ the deployer's choice — at OSGi runtime the io.grpc packages come from the gecko \
+ io.grpc.core/io.grpc.netty wrap bundles.
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.service.api;version=snapshot,\
+	org.eclipse.fennec.protobuf;version=snapshot,\
+	org.eclipse.fennec.protobuf.ecore;version=snapshot,\
+	com.google.protobuf;version=latest,\
+	io.grpc:grpc-api;version=latest,\
+	io.grpc:grpc-stub;version=latest
+
+-testpath: \
+	assertj-core;version=latest,\
+	io.grpc:grpc-core;version=latest,\
+	io.grpc:grpc-util;version=latest,\
+	io.grpc:grpc-inprocess;version=latest,\
+	io.grpc:grpc-context;version=latest,\
+	io.grpc:grpc-netty;version=latest,\
+	io.netty:netty-buffer;version=latest,\
+	io.netty:netty-codec;version=latest,\
+	io.netty:netty-codec-http;version=latest,\
+	io.netty:netty-codec-http2;version=latest,\
+	io.netty:netty-codec-socks;version=latest,\
+	io.netty:netty-common;version=latest,\
+	io.netty:netty-handler;version=latest,\
+	io.netty:netty-handler-proxy;version=latest,\
+	io.netty:netty-resolver;version=latest,\
+	io.netty:netty-transport;version=latest,\
+	io.netty:netty-transport-native-unix-common;version=latest,\
+	io.perfmark:perfmark-api;version=latest,\
+	com.google.guava:guava;version=latest,\
+	com.google.guava:failureaccess;version=latest,\
+	com.google.errorprone:error_prone_annotations;version=latest
