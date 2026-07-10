@@ -108,14 +108,11 @@ a headless client — obtain the token elsewhere and pass it via `OpenApiAuth.be
   not resolved. RPC-style and non-JSON content are skipped with a diagnostic.
 - **Dynamic-mode client** (JDK `HttpClient` + codec). A Jersey/`codec.rest` variant and a typed
   proxy are on the [service-clients](/guides/service-clients) roadmap.
-- **Importer caveat:** the codec's JSON-Schema converter leaves schema-to-schema `$ref` features
-  untyped; the importer repairs them (a diagnostic is added when a ref cannot be resolved). The
-  proper fix belongs upstream in `emf.codec`.
-- **Second importer caveat:** the codec's generic deserializer drops the dynamic scheme names of
-  a security requirement (`{"api_key": []}`); the importer ships its own
-  `SecurityRequirementValueReader` and binds it via load options. This too belongs upstream in
-  `emf.codec` (`OpenApiResourceFactoryImpl` + `valueReaderName` annotations on the `security`
-  features).
+- **Codec version:** requires a fennecCodec snapshot from 2026-07-10 or later — older ones left
+  schema-to-schema `$ref` features untyped ([emf.codec#43](https://github.com/eclipse-fennec/emf.codec/issues/43))
+  and dropped the scheme names of security requirements
+  ([emf.codec#44](https://github.com/eclipse-fennec/emf.codec/issues/44)). A genuinely
+  unresolvable `$ref` is degraded to `EObject`/`EString` with a diagnostic (safety net).
 - **Auth v1:** `apiKey`, `http` basic/bearer, `oauth2` `client_credentials` (or a pre-obtained
   bearer token). No `authorization_code`/`implicit` flows, no `openIdConnect` discovery.
 

@@ -31,13 +31,8 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.fennec.codec.jsonschema.v2.value.EPackageValueReader;
-import org.eclipse.fennec.codec.openapi.OpenApiResourceImpl;
-import org.eclipse.fennec.codec.openapi.OpenApiSchemasValueWriter;
-import org.eclipse.fennec.codec.openapi.OperationValueReader;
+import org.eclipse.fennec.codec.openapi.OpenApiResourceFactoryImpl;
 import org.eclipse.fennec.codec.resource.CodecResource;
-import org.eclipse.fennec.codec.util.MetadataServiceFactory;
-import org.eclipse.fennec.codec.value.CodecValueRegistry;
 import org.eclipse.fennec.model.openapi.Components;
 import org.eclipse.fennec.model.openapi.MediaType;
 import org.eclipse.fennec.model.openapi.OpenAPI;
@@ -48,7 +43,6 @@ import org.eclipse.fennec.model.openapi.PathItem;
 import org.eclipse.fennec.model.openapi.RequestBody;
 import org.eclipse.fennec.model.openapi.Response;
 import org.eclipse.fennec.model.openapi.Schema;
-import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
 import org.eclipse.fennec.model.openapi.SecurityRequirement;
 import org.eclipse.fennec.model.openapi.SecurityScheme;
 
@@ -139,29 +133,11 @@ public final class OpenApiImporter {
 
 	// --- document loading (codec pipeline) ---------------------------------------------------
 
-	/**
-	 * Loads the document through the codec's OpenAPI pipeline. The resource is assembled here
-	 * (instead of {@code OpenApiResourceFactoryImpl}) so the {@link SecurityRequirementValueReader}
-	 * can join the value registry; the {@code security} features are bound to it via the
-	 * {@code ClassName.featureName → valueReaderName} load options. Once the reader ships in the
-	 * codec's own factory, this collapses back to {@code new OpenApiResourceFactoryImpl()}.
-	 */
 	private OpenAPI load(byte[] document, String extension) {
-		MetadataWhiteboard whiteboard = MetadataServiceFactory.create();
-		whiteboard.registerPackage(OpenApiPackage.eINSTANCE);
-		CodecValueRegistry registry = new CodecValueRegistry();
-		registry.register(new OperationValueReader());
-		registry.register(new EPackageValueReader());
-		registry.register(new OpenApiSchemasValueWriter());
-		registry.register(new SecurityRequirementValueReader());
-		Resource resource = new OpenApiResourceImpl(URI.createURI("import://openapi." + extension),
-				whiteboard, registry);
-
+		OpenApiResourceFactoryImpl factory = new OpenApiResourceFactoryImpl();
+		Resource resource = factory.createResource(URI.createURI("import://openapi." + extension));
 		Map<String, Object> options = new LinkedHashMap<>();
 		options.put(CodecResource.CODEC_ROOT_TYPE, OpenApiPackage.Literals.OPEN_API);
-		Map<String, Object> securityReader = Map.of("valueReaderName", SecurityRequirementValueReader.NAME);
-		options.put("OpenAPI.security", securityReader);
-		options.put("Operation.security", securityReader);
 		try {
 			resource.load(new ByteArrayInputStream(document), options);
 		} catch (IOException e) {
@@ -189,18 +165,17 @@ public final class OpenApiImporter {
 		if (generated.getNsURI() == null || generated.getNsURI().isBlank()) {
 			generated.setNsURI(SCHEMAS_NS);
 		}
-		repairDanglingRefs(generated);
+		ensureTypedFeatures(generated);
 		return generated;
 	}
 
 	/**
-	 * The codec's JSON-Schema converter leaves a schema-to-schema {@code $ref} feature with a
-	 * {@code null} eType (recording the ref only as an annotation) — which downstream consumers
-	 * (e.g. the metadata service) trip over. Re-wire those features against the classifiers of
-	 * the same package; an unresolvable ref degrades to {@code EObject}/{@code EString} with a
-	 * diagnostic instead of a broken model.
+	 * Safety net: schema-to-schema {@code $ref} resolution is done by the codec (emf.codec #43),
+	 * but a genuinely unresolvable ref can still leave a feature untyped — which downstream
+	 * consumers (e.g. the metadata service) trip over. Degrade those to
+	 * {@code EObject}/{@code EString} with a diagnostic instead of a broken model.
 	 */
-	private void repairDanglingRefs(EPackage generated) {
+	private void ensureTypedFeatures(EPackage generated) {
 		for (EClassifier classifier : generated.getEClassifiers()) {
 			if (!(classifier instanceof EClass eClass)) {
 				continue;
@@ -211,20 +186,11 @@ public final class OpenApiImporter {
 				}
 				EAnnotation a = feature.getEAnnotation(JSONSCHEMA_SOURCE);
 				String ref = a == null ? null : a.getDetails().get("ref");
-				EClassifier target = null;
-				if (ref != null && !ref.isBlank()) {
-					target = generated.getEClassifier(capitalize(ref.substring(ref.lastIndexOf('/') + 1)));
-				}
-				if (target != null) {
-					feature.setEType(target);
-				} else {
-					feature.setEType(feature instanceof EReference
-							? EcorePackage.eINSTANCE.getEObject()
-							: EcorePackage.eINSTANCE.getEString());
-					diagnostics.add("Schema feature " + eClass.getName() + "." + feature.getName()
-							+ ": unresolved $ref '" + ref + "' — typed as "
-							+ feature.getEType().getName());
-				}
+				feature.setEType(feature instanceof EReference
+						? EcorePackage.eINSTANCE.getEObject()
+						: EcorePackage.eINSTANCE.getEString());
+				diagnostics.add("Schema feature " + eClass.getName() + "." + feature.getName()
+						+ ": unresolved $ref '" + ref + "' — typed as " + feature.getEType().getName());
 			}
 		}
 	}

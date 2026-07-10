@@ -130,8 +130,8 @@ class OpenApiImporterTest {
 	}
 
 	@Test
-	@DisplayName("re-wires schema-to-schema $refs the converter leaves untyped")
-	void repairsDanglingSchemaRefs() {
+	@DisplayName("schema-to-schema $refs are typed (fixed upstream, emf.codec #43)")
+	void schemaToSchemaRefsAreTyped() {
 		String doc = """
 				{
 				  "openapi": "3.0.3",
@@ -150,7 +150,7 @@ class OpenApiImporterTest {
 		OpenApiModel model = OpenApiImporter.fromJson(doc.getBytes(StandardCharsets.UTF_8));
 
 		EClass pet = (EClass) model.schemasPackage().getEClassifier("Pet");
-		// without the repair these eTypes are null (the converter records the ref only as an annotation)
+		// resolved by the codec's converter (emf.codec #43); the importer only degrades leftovers
 		assertThat(pet.getEStructuralFeature("category").getEType())
 				.isSameAs(model.schemasPackage().getEClassifier("Category"));
 		assertThat(pet.getEStructuralFeature("tags").getEType())
