@@ -68,6 +68,11 @@ class PetstoreRemoteTest {
 		assertThat(getPet.requestType().getEStructuralFeature("petId")).isNotNull();
 		assertThat(getPet.responseType().getName()).isEqualTo("Pet");
 
+		// security is imported: the petstore declares api_key + petstore_auth,
+		// and getPetById accepts either (two requirement alternatives)
+		assertThat(model.securitySchemes()).containsKeys("api_key", "petstore_auth");
+		assertThat(getPet.security()).hasSize(2);
+
 		// the cross-schema $refs are repaired (Pet.category -> Category, Pet.tags -> Tag)
 		EClass pet = (EClass) model.schemasPackage().getEClassifier("Pet");
 		assertThat(pet.getEStructuralFeature("category").getEType().getName()).isEqualTo("Category");
@@ -75,10 +80,12 @@ class PetstoreRemoteTest {
 	}
 
 	@Test
-	@DisplayName("reads a seeded pet via the synthetic path-parameter request")
+	@DisplayName("reads a seeded pet via the synthetic path-parameter request (api_key auth)")
 	void readsSeededPet() {
 		OpenApiOperation getPet = (OpenApiOperation) model.operation("getPetById");
-		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)) {
+		// getPetById requires api_key OR petstore_auth; "special-key" is the petstore's test key
+		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)
+				.withAuth("api_key", OpenApiAuth.apiKey("special-key"))) {
 			EObject pet = null;
 			for (long id : List.of(1L, 2L, 3L)) {
 				try {
@@ -98,7 +105,11 @@ class PetstoreRemoteTest {
 	@Test
 	@DisplayName("creates a pet and reads it back (skipped while the public write path is down)")
 	void createAndReadPet() {
-		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)) {
+		// addPet requires petstore_auth (oauth2 implicit — interactive); the petstore accepts any
+		// bearer token, which exercises the bearer-on-oauth2 path against a real endpoint
+		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)
+				.withAuth("api_key", OpenApiAuth.apiKey("special-key"))
+				.withAuth("petstore_auth", OpenApiAuth.bearer("special-key"))) {
 			EClass pet = (EClass) model.schemasPackage().getEClassifier("Pet");
 			EObject rex = EcoreUtil.create(pet);
 			long id = System.currentTimeMillis() % 1_000_000_000L;

@@ -33,6 +33,7 @@ import org.eclipse.fennec.codec.resource.CodecResource;
 import org.eclipse.fennec.codec.resource.CodecResourceFactory;
 import org.eclipse.fennec.codec.util.MetadataServiceFactory;
 import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
+import org.eclipse.fennec.model.openapi.SecurityScheme;
 import org.eclipse.fennec.openapi.ecore.OpenApiAnnotations;
 import org.eclipse.fennec.openapi.ecore.OpenApiModel;
 import org.eclipse.fennec.openapi.ecore.OpenApiOperation;
@@ -49,8 +50,11 @@ import org.eclipse.fennec.service.api.ServiceOperation;
  * <p>
  * v1: request-response, {@code application/json}, single-object responses (an
  * {@linkplain OpenApiOperation#responseMany() array response} is rejected with a clear error).
- * Auth/interceptors: use {@link #unwrap(Class)} to reach the native client, or set default
- * headers via {@link #withHeader}.
+ * Authentication: register {@link OpenApiAuth} credentials per declared scheme via
+ * {@link #withAuth(String, OpenApiAuth)} (or {@link #withAuth(OpenApiAuth)} when the document
+ * declares exactly one scheme) — applied per operation according to its effective security
+ * requirements. Escape hatches: {@link #withHeader} for static headers, {@link #unwrap(Class)}
+ * for the native client.
  */
 public final class OpenApiServiceClient implements ServiceClient {
 
@@ -59,6 +63,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 	private final CodecResourceFactory codecFactory;
 	private final HttpClient http;
 	private final Map<String, String> defaultHeaders = new LinkedHashMap<>();
+	private final Map<String, OpenApiAuth> auth = new LinkedHashMap<>();
 
 	public OpenApiServiceClient(java.net.URI baseUri, OpenApiModel model) {
 		this.baseUri = baseUri;
@@ -74,10 +79,29 @@ public final class OpenApiServiceClient implements ServiceClient {
 		this.http = HttpClient.newHttpClient();
 	}
 
-	/** Adds a header sent with every request (e.g. auth). */
+	/** Adds a header sent with every request. */
 	public OpenApiServiceClient withHeader(String name, String value) {
 		defaultHeaders.put(name, value);
 		return this;
+	}
+
+	/** Registers credentials for a security scheme the document declares. */
+	public OpenApiServiceClient withAuth(String schemeName, OpenApiAuth credentials) {
+		if (model.securityScheme(schemeName) == null) {
+			throw new IllegalArgumentException("Unknown security scheme '" + schemeName
+					+ "' — the document declares " + model.securitySchemes().keySet());
+		}
+		auth.put(schemeName, credentials);
+		return this;
+	}
+
+	/** Convenience: registers credentials for the document's <b>single</b> declared scheme. */
+	public OpenApiServiceClient withAuth(OpenApiAuth credentials) {
+		if (model.securitySchemes().size() != 1) {
+			throw new IllegalStateException("The document declares " + model.securitySchemes().keySet()
+					+ " — name the scheme via withAuth(schemeName, credentials)");
+		}
+		return withAuth(model.securitySchemes().keySet().iterator().next(), credentials);
 	}
 
 	@Override
@@ -158,6 +182,8 @@ public final class OpenApiServiceClient implements ServiceClient {
 			}
 		}
 
+		applyAuth(op, headers, query);
+
 		java.net.URI target = java.net.URI.create(baseUri.toString().replaceAll("/$", "") + path
 				+ (query.isEmpty() ? "" : "?" + query));
 		HttpRequest.Builder builder = HttpRequest.newBuilder(target);
@@ -169,6 +195,62 @@ public final class OpenApiServiceClient implements ServiceClient {
 			builder.method(op.httpMethod(), BodyPublishers.noBody());
 		}
 		return builder.build();
+	}
+
+	// --- authentication -------------------------------------------------------------------------
+
+	/**
+	 * Satisfies the operation's effective security: the first requirement alternative whose
+	 * schemes all have registered credentials wins (an empty alternative — anonymous allowed —
+	 * matches trivially). Required-but-unregistered credentials fail here, before any HTTP.
+	 */
+	private void applyAuth(OpenApiOperation op, Map<String, String> headers, StringBuilder query) {
+		List<Map<String, List<String>>> alternatives = op.security();
+		if (alternatives.isEmpty()) {
+			return;
+		}
+		for (Map<String, List<String>> alternative : alternatives) {
+			if (!auth.keySet().containsAll(alternative.keySet())) {
+				continue;
+			}
+			for (Map.Entry<String, List<String>> requirement : alternative.entrySet()) {
+				SecurityScheme scheme = model.securityScheme(requirement.getKey());
+				if (scheme == null) {
+					throw new ServiceInvocationException("Operation '" + op.name()
+							+ "' requires undeclared security scheme '" + requirement.getKey() + "'");
+				}
+				auth.get(requirement.getKey()).apply(requirement.getKey(), scheme,
+						requirement.getValue(), target(headers, query));
+			}
+			return;
+		}
+		throw new ServiceInvocationException("Operation '" + op.name() + "' requires authentication ("
+				+ alternatives.stream().map(Map::keySet).toList()
+				+ ") — register credentials via withAuth(...)");
+	}
+
+	private OpenApiAuth.Target target(Map<String, String> headers, StringBuilder query) {
+		return new OpenApiAuth.Target() {
+			@Override
+			public void header(String name, String value) {
+				headers.put(name, value);
+			}
+
+			@Override
+			public void query(String name, String value) {
+				query.append(query.isEmpty() ? "" : "&").append(encode(name)).append('=').append(encode(value));
+			}
+
+			@Override
+			public void cookie(String name, String value) {
+				headers.merge("Cookie", name + "=" + value, (a, b) -> a + "; " + b);
+			}
+
+			@Override
+			public HttpClient http() {
+				return http;
+			}
+		};
 	}
 
 	// --- JSON marshalling (codec) -------------------------------------------------------------

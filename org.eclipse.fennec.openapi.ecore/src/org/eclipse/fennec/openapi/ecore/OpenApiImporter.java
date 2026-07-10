@@ -14,10 +14,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
@@ -29,8 +31,13 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.fennec.codec.openapi.OpenApiResourceFactoryImpl;
+import org.eclipse.fennec.codec.jsonschema.v2.value.EPackageValueReader;
+import org.eclipse.fennec.codec.openapi.OpenApiResourceImpl;
+import org.eclipse.fennec.codec.openapi.OpenApiSchemasValueWriter;
+import org.eclipse.fennec.codec.openapi.OperationValueReader;
 import org.eclipse.fennec.codec.resource.CodecResource;
+import org.eclipse.fennec.codec.util.MetadataServiceFactory;
+import org.eclipse.fennec.codec.value.CodecValueRegistry;
 import org.eclipse.fennec.model.openapi.Components;
 import org.eclipse.fennec.model.openapi.MediaType;
 import org.eclipse.fennec.model.openapi.OpenAPI;
@@ -41,6 +48,9 @@ import org.eclipse.fennec.model.openapi.PathItem;
 import org.eclipse.fennec.model.openapi.RequestBody;
 import org.eclipse.fennec.model.openapi.Response;
 import org.eclipse.fennec.model.openapi.Schema;
+import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
+import org.eclipse.fennec.model.openapi.SecurityRequirement;
+import org.eclipse.fennec.model.openapi.SecurityScheme;
 
 /**
  * Derives {@link OpenApiOperation}s (plus their request/response {@link EClass}es) from an
@@ -55,7 +65,9 @@ import org.eclipse.fennec.model.openapi.Schema;
  * features carry {@code in=path|query|header|cookie} annotations, plus an optional {@code body}
  * containment reference — so a form UI / client can treat every request uniformly as one EObject;</li>
  * <li>response → the first 2xx (or {@code default}) {@code application/json} schema; a JSON array
- * resolves to its item EClass with {@link OpenApiOperation#responseMany()}.</li>
+ * resolves to its item EClass with {@link OpenApiOperation#responseMany()};</li>
+ * <li>security → {@code components/securitySchemes} is exposed on the model as-is; each
+ * operation carries its effective requirements (own {@code security}, else the global one).</li>
  * </ul>
  * Inline (unnamed) schemas and non-JSON content are recorded as diagnostics, not resolved (v1).
  */
@@ -69,6 +81,8 @@ public final class OpenApiImporter {
 	private static final String JSONSCHEMA_SOURCE = "http://fennec.eclipse.org/jsonschema";
 
 	private final List<String> diagnostics = new ArrayList<>();
+	private final Map<String, SecurityScheme> securitySchemes = new LinkedHashMap<>();
+	private List<Map<String, List<String>>> globalSecurity = List.of();
 	private EPackage schemasPackage;
 	private EPackage requestsPackage;
 
@@ -100,6 +114,11 @@ public final class OpenApiImporter {
 	private OpenApiModel run(byte[] document, String extension) {
 		OpenAPI openApi = load(document, extension);
 		schemasPackage = schemasPackage(openApi);
+		if (openApi.getComponents() != null) {
+			openApi.getComponents().getSecuritySchemes()
+					.forEach(entry -> securitySchemes.put(entry.getKey(), entry.getValue()));
+		}
+		globalSecurity = requirements("document", openApi.getSecurity());
 
 		List<OpenApiOperation> operations = new ArrayList<>();
 		if (openApi.getPaths() != null) {
@@ -115,16 +134,34 @@ public final class OpenApiImporter {
 				operation(operations, "TRACE", path.getKey(), item.getTrace());
 			}
 		}
-		return new OpenApiModel(openApi, schemasPackage, requestsPackage, operations, diagnostics);
+		return new OpenApiModel(openApi, schemasPackage, requestsPackage, securitySchemes, operations, diagnostics);
 	}
 
 	// --- document loading (codec pipeline) ---------------------------------------------------
 
+	/**
+	 * Loads the document through the codec's OpenAPI pipeline. The resource is assembled here
+	 * (instead of {@code OpenApiResourceFactoryImpl}) so the {@link SecurityRequirementValueReader}
+	 * can join the value registry; the {@code security} features are bound to it via the
+	 * {@code ClassName.featureName → valueReaderName} load options. Once the reader ships in the
+	 * codec's own factory, this collapses back to {@code new OpenApiResourceFactoryImpl()}.
+	 */
 	private OpenAPI load(byte[] document, String extension) {
-		OpenApiResourceFactoryImpl factory = new OpenApiResourceFactoryImpl();
-		Resource resource = factory.createResource(URI.createURI("import://openapi." + extension));
+		MetadataWhiteboard whiteboard = MetadataServiceFactory.create();
+		whiteboard.registerPackage(OpenApiPackage.eINSTANCE);
+		CodecValueRegistry registry = new CodecValueRegistry();
+		registry.register(new OperationValueReader());
+		registry.register(new EPackageValueReader());
+		registry.register(new OpenApiSchemasValueWriter());
+		registry.register(new SecurityRequirementValueReader());
+		Resource resource = new OpenApiResourceImpl(URI.createURI("import://openapi." + extension),
+				whiteboard, registry);
+
 		Map<String, Object> options = new LinkedHashMap<>();
 		options.put(CodecResource.CODEC_ROOT_TYPE, OpenApiPackage.Literals.OPEN_API);
+		Map<String, Object> securityReader = Map.of("valueReaderName", SecurityRequirementValueReader.NAME);
+		options.put("OpenAPI.security", securityReader);
+		options.put("Operation.security", securityReader);
 		try {
 			resource.load(new ByteArrayInputStream(document), options);
 		} catch (IOException e) {
@@ -216,7 +253,36 @@ public final class OpenApiImporter {
 				response = resolve(name, responseSchema);
 			}
 		}
-		target.add(new OpenApiOperation(name, method, path, request, response, many));
+		target.add(new OpenApiOperation(name, method, path, request, response, many, security(name, operation)));
+	}
+
+	/**
+	 * The operation's effective security: its own {@code security} when declared, otherwise the
+	 * document's global one. (EMF cannot distinguish an absent list from an explicit
+	 * {@code security: []} — both fall back to the global requirements.)
+	 */
+	private List<Map<String, List<String>>> security(String operation, Operation declared) {
+		if (declared.getSecurity().isEmpty()) {
+			return globalSecurity;
+		}
+		return requirements("operation '" + operation + "'", declared.getSecurity());
+	}
+
+	/** {@link SecurityRequirement}s as plain immutable maps (scheme name → required scopes). */
+	private List<Map<String, List<String>>> requirements(String context, List<SecurityRequirement> declared) {
+		List<Map<String, List<String>>> result = new ArrayList<>();
+		for (SecurityRequirement requirement : declared) {
+			Map<String, List<String>> schemes = new LinkedHashMap<>();
+			for (Map.Entry<String, EList<String>> entry : requirement.getSchemes().entrySet()) {
+				if (!securitySchemes.containsKey(entry.getKey())) {
+					diagnostics.add(context + ": security requirement references undeclared scheme '"
+							+ entry.getKey() + "'");
+				}
+				schemes.put(entry.getKey(), entry.getValue() == null ? List.of() : List.copyOf(entry.getValue()));
+			}
+			result.add(Collections.unmodifiableMap(schemes));
+		}
+		return Collections.unmodifiableList(result);
 	}
 
 	/** The JSON body EClass of the operation's requestBody, or {@code null}. */

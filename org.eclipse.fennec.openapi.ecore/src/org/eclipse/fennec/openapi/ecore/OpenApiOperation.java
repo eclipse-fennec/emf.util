@@ -9,6 +9,9 @@
  */
 package org.eclipse.fennec.openapi.ecore;
 
+import java.util.List;
+import java.util.Map;
+
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.fennec.service.api.ServiceOperation;
 
@@ -25,8 +28,18 @@ import org.eclipse.fennec.service.api.ServiceOperation;
  * @param requestType   body EClass, synthetic request EClass, or {@code null}
  * @param responseType  the 2xx JSON response EClass (array: its item EClass), or {@code null}
  * @param responseMany  whether the 2xx response is a JSON array of {@link #responseType()}
+ * @param security      the <b>effective</b> security requirements (the operation's own, falling
+ *                      back to the document's global {@code security}): alternatives to choose
+ *                      from (OR); within one alternative every entry must be satisfied (AND),
+ *                      mapping the {@link OpenApiModel#securitySchemes() scheme name} to the
+ *                      required scopes. Empty list = no authentication required.
  * @see OpenApiImporter
  */
 public record OpenApiOperation(String name, String httpMethod, String pathTemplate,
-		EClass requestType, EClass responseType, boolean responseMany) implements ServiceOperation {
+		EClass requestType, EClass responseType, boolean responseMany,
+		List<Map<String, List<String>>> security) implements ServiceOperation {
+
+	public OpenApiOperation {
+		security = List.copyOf(security);
+	}
 }

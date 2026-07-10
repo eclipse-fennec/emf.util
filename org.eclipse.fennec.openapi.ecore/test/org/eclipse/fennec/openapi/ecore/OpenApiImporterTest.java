@@ -12,10 +12,15 @@ package org.eclipse.fennec.openapi.ecore;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.fennec.model.openapi.ApiKeyLocation;
+import org.eclipse.fennec.model.openapi.SecurityScheme;
+import org.eclipse.fennec.model.openapi.SecuritySchemeType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -150,6 +155,73 @@ class OpenApiImporterTest {
 				.isSameAs(model.schemasPackage().getEClassifier("Category"));
 		assertThat(pet.getEStructuralFeature("tags").getEType())
 				.isSameAs(model.schemasPackage().getEClassifier("Tag"));
+	}
+
+	@Test
+	@DisplayName("securitySchemes + global/per-operation security requirements are imported")
+	void securitySchemes() {
+		String doc = """
+				{
+				  "openapi": "3.0.3",
+				  "info": { "title": "Secured", "version": "1.0" },
+				  "security": [ { "api_key": [] } ],
+				  "paths": {
+				    "/pets": {
+				      "get": {
+				        "operationId": "listPets",
+				        "responses": { "200": { "description": "ok" } }
+				      },
+				      "post": {
+				        "operationId": "createPet",
+				        "security": [ { "petstore_auth": [ "write:pets" ] }, { "api_key": [] } ],
+				        "responses": { "200": { "description": "ok" } }
+				      }
+				    }
+				  },
+				  "components": { "securitySchemes": {
+				    "api_key": { "type": "apiKey", "name": "X-Api-Key", "in": "header" },
+				    "petstore_auth": { "type": "oauth2", "flows": { "clientCredentials": {
+				      "tokenUrl": "https://auth.example.org/token",
+				      "scopes": { "write:pets": "modify pets" } } } }
+				  } }
+				}
+				""";
+		OpenApiModel model = OpenApiImporter.fromJson(doc.getBytes(StandardCharsets.UTF_8));
+
+		assertThat(model.securitySchemes()).containsOnlyKeys("api_key", "petstore_auth");
+		SecurityScheme apiKey = model.securityScheme("api_key");
+		assertThat(apiKey.getType()).isEqualTo(SecuritySchemeType.API_KEY);
+		assertThat(apiKey.getName()).isEqualTo("X-Api-Key");
+		assertThat(apiKey.getIn()).isEqualTo(ApiKeyLocation.HEADER);
+		SecurityScheme oauth = model.securityScheme("petstore_auth");
+		assertThat(oauth.getType()).isEqualTo(SecuritySchemeType.OAUTH2);
+		assertThat(oauth.getFlows().getClientCredentials().getTokenUrl())
+				.isEqualTo("https://auth.example.org/token");
+
+		// no own security -> inherits the global requirement
+		assertThat(model.operation("listPets").security())
+				.containsExactly(Map.of("api_key", List.of()));
+		// own security overrides, alternatives + scopes preserved
+		assertThat(model.operation("createPet").security()).containsExactly(
+				Map.of("petstore_auth", List.of("write:pets")),
+				Map.of("api_key", List.of()));
+	}
+
+	@Test
+	@DisplayName("a requirement referencing an undeclared scheme yields a diagnostic")
+	void undeclaredSchemeDiagnostic() {
+		String doc = """
+				{
+				  "openapi": "3.0.3",
+				  "info": { "title": "Broken", "version": "1.0" },
+				  "security": [ { "ghost": [] } ],
+				  "paths": {}
+				}
+				""";
+		OpenApiModel model = OpenApiImporter.fromJson(doc.getBytes(StandardCharsets.UTF_8));
+
+		assertThat(model.securitySchemes()).isEmpty();
+		assertThat(model.diagnostics()).anyMatch(d -> d.contains("ghost"));
 	}
 
 	@Test

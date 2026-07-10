@@ -68,9 +68,37 @@ whole request, for body-only operations) is serialized as JSON. The response JSO
 into `responseType()`. Payloads are serialized **without** the EMF `_type` discriminator, so the
 wire is plain interop JSON.
 
-- `withHeader(name, value)` adds a header to every request (e.g. auth).
+- `withHeader(name, value)` adds a header to every request.
 - `unwrap(HttpClient.class)` gives you the native client.
 - An HTTP error or a JSON parse failure becomes a `ServiceInvocationException`.
+
+## Authentication
+
+The importer reads `components/securitySchemes` (`model.securitySchemes()`) and each operation's
+**effective** security requirements (`operation.security()` — its own `security`, falling back to
+the document's global one). On the client you register **credentials per scheme name**; *where*
+the credential goes (header/query/cookie, parameter name, token URL) always comes from the
+document, only the secret comes from you:
+
+```java
+client.withAuth("api_key", OpenApiAuth.apiKey("secret"))               // apiKey: header/query/cookie per scheme
+      .withAuth("basic_auth", OpenApiAuth.basic("scott", "tiger"))     // http/basic
+      .withAuth("bearer_auth", OpenApiAuth.bearer(tokenSupplier))      // http/bearer, oauth2, openIdConnect
+      .withAuth("oauth", OpenApiAuth.clientCredentials(id, secret));   // oauth2 client_credentials
+// document declares exactly one scheme? then simply:
+client.withAuth(OpenApiAuth.apiKey("secret"));
+```
+
+Per invocation the client picks the **first requirement alternative** whose schemes all have
+registered credentials (an empty alternative — anonymous allowed — matches trivially) and applies
+them. A required but unregistered scheme fails fast with a `ServiceInvocationException` *before*
+any HTTP; so does a credential that cannot satisfy the scheme's type (e.g. `apiKey` credentials
+on an `http/basic` scheme).
+
+`clientCredentials` POSTs to the flow's declared `tokenUrl` (client id/secret via HTTP Basic,
+the requirement's scopes as `scope`), caches the `access_token` and re-fetches shortly before
+`expires_in` runs out. The interactive `authorization_code` flow is deliberately out of scope for
+a headless client — obtain the token elsewhere and pass it via `OpenApiAuth.bearer(...)`.
 
 ## Scope / limitations (v1)
 
@@ -83,6 +111,13 @@ wire is plain interop JSON.
 - **Importer caveat:** the codec's JSON-Schema converter leaves schema-to-schema `$ref` features
   untyped; the importer repairs them (a diagnostic is added when a ref cannot be resolved). The
   proper fix belongs upstream in `emf.codec`.
+- **Second importer caveat:** the codec's generic deserializer drops the dynamic scheme names of
+  a security requirement (`{"api_key": []}`); the importer ships its own
+  `SecurityRequirementValueReader` and binds it via load options. This too belongs upstream in
+  `emf.codec` (`OpenApiResourceFactoryImpl` + `valueReaderName` annotations on the `security`
+  features).
+- **Auth v1:** `apiKey`, `http` basic/bearer, `oauth2` `client_credentials` (or a pre-obtained
+  bearer token). No `authorization_code`/`implicit` flows, no `openIdConnect` discovery.
 
 ## Dependencies
 
