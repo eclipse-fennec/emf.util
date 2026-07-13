@@ -143,6 +143,7 @@ class OpenApiAuthTest {
 
 	@Test
 	@DisplayName("apiKey lands in the header/query parameter the scheme declares")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void apiKeyPlacement() {
 		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)
 				.withAuth("api_key", OpenApiAuth.apiKey("secret-h"))
@@ -160,6 +161,7 @@ class OpenApiAuthTest {
 
 	@Test
 	@DisplayName("http basic and bearer set the Authorization header")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void basicAndBearer() {
 		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)
 				.withAuth("basic_auth", OpenApiAuth.basic("scott", "tiger"))
@@ -176,6 +178,7 @@ class OpenApiAuthTest {
 
 	@Test
 	@DisplayName("client_credentials fetches the token from the declared tokenUrl and caches it")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void clientCredentials() {
 		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)
 				.withAuth("oauth", OpenApiAuth.clientCredentials("my-client", "my-secret"))) {
@@ -218,6 +221,7 @@ class OpenApiAuthTest {
 
 	@Test
 	@DisplayName("credentials that cannot satisfy the scheme type are rejected with a clear error")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void mismatchedCredentials() {
 		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)
 				.withAuth("basic_auth", OpenApiAuth.apiKey("nope"))) {

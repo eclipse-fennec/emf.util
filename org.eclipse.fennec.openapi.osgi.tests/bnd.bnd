@@ -1,0 +1,12 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+Bundle-Name: Fennec EMF OpenAPI Client OSGi Test
+Bundle-Description: EMF OpenAPI Client OSGi Integration Test
+
+-library: \
+	enableOSGi-Test,\
+	enableEMF
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.eclipse.fennec.service.api;version=snapshot

@@ -1,0 +1,28 @@
+Bundle-Name: Fennec EMF OpenAPI Client OSGi
+Bundle-Description: Publishes a configuration-driven OpenAPI ServiceClient as an OSGi \
+ service. Each ConfigurationAdmin factory instance (documentUrl + baseUri + auth) imports \
+ the referenced OpenAPI 3 document and registers a ready-to-use ServiceClient, backed by the \
+ framework's shared MetadataWhiteboard.
+
+-library: enableEMF
+
+Export-Package: \
+	org.eclipse.fennec.openapi.client,\
+	org.eclipse.fennec.openapi.ecore
+
+Private-Package: \
+	org.eclipse.fennec.openapi.osgi
+
+-buildpath: \
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.metatype.annotations;version=latest,\
+	org.osgi.service.condition;version=latest,\
+	org.eclipse.fennec.service.api;version=snapshot,\
+	org.eclipse.fennec.openapi.client;version=snapshot,\
+	org.eclipse.fennec.openapi.ecore;version=snapshot,\
+	org.eclipse.fennec.openapi.model;version=latest,\
+	org.eclipse.fennec.codec;version=latest,\
+	org.eclipse.fennec.codec.api;version=latest,\
+	org.eclipse.fennec.model.metadata;version="[0.1,0.2)",\
+	tools.jackson.core.jackson-core;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest

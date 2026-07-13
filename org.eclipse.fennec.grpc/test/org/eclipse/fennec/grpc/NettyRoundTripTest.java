@@ -99,6 +99,7 @@ class NettyRoundTripTest {
 
 	@Test
 	@DisplayName("unary call over a real Netty HTTP/2 connection")
+	@SuppressWarnings("resource") // fluent withDeadline(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void nettyRoundTrip() {
 		try (GrpcServiceClient client = new GrpcServiceClient(channel, model)
 				.withDeadline(Duration.ofSeconds(10))) {

@@ -100,6 +100,28 @@ the requirement's scopes as `scope`), caches the `access_token` and re-fetches s
 `expires_in` runs out. The interactive `authorization_code` flow is deliberately out of scope for
 a headless client — obtain the token elsewhere and pass it via `OpenApiAuth.bearer(...)`.
 
+## OSGi
+
+Bundle `org.eclipse.fennec.openapi.osgi` publishes a **configuration-driven** `ServiceClient` as
+an OSGi service — the client counterpart of the Protobuf/SOAP `Resource.Factory` components. Each
+ConfigurationAdmin **factory** configuration for PID `OpenApiServiceClient` imports one document and
+registers one ready-to-invoke `ServiceClient`:
+
+| Property | Meaning |
+| --- | --- |
+| `documentUrl` | URL the OpenAPI 3 document is fetched from (`http`/`https`/`file`) |
+| `baseUri` | base URI of the target service, e.g. `https://api.example.com/v1` |
+| `format` | `json` (default) or `yaml` |
+| `auth` | credentials, one entry per scheme: `<scheme>=<type>:<params>` — `apiKey:<key>`, `bearer:<token>`, `basic:<user>:<pass>`, `clientCredentials:<id>:<secret>` (empty `<scheme>` for a single-scheme document) |
+
+The component binds the framework's shared `MetadataWhiteboard`. Because the importer stamps the
+generated `schemas`/`requests` packages with **constant** nsURIs and the whiteboard keys metadata by
+nsURI, each configuration first rewrites those nsURIs to be unique to itself — so several OpenAPI
+clients can share one whiteboard without colliding; the packages are unregistered on deactivation.
+Consumers `@Reference` the `ServiceClient` and must **not** `close()` it (its lifecycle follows the
+configuration). The bundle inlines the `openapi.client`/`openapi.ecore` runtime packages (like the
+SOAP `.osgi` bundle) but still needs the codec bundles at runtime.
+
 ## Scope / limitations (v1)
 
 - **Request-response, `application/json`, single-object responses.** An array response is imported

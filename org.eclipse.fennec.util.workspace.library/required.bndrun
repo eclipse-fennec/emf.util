@@ -10,6 +10,7 @@
 	bnd.identity;id='org.eclipse.fennec.soap.ecore',\
 	bnd.identity;id='org.eclipse.fennec.openapi.client',\
 	bnd.identity;id='org.eclipse.fennec.openapi.ecore',\
+	bnd.identity;id='org.eclipse.fennec.openapi.osgi',\
 	bnd.identity;id='org.eclipse.fennec.grpc',\
 	bnd.identity;id='io.grpc.netty'
 # io.grpc comes from the gecko wrap bundles (org.geckoprojects.libraries:io.grpc.core /
@@ -69,4 +70,5 @@
 	io.netty.transport;version='[4.1.133,4.1.134)',\
 	io.netty.transport-native-unix-common;version='[4.1.133,4.1.134)',\
 	org.eclipse.fennec.grpc;version=snapshot,\
-	org.jsr-305;version='[3.0.2,3.0.3)'
+	org.jsr-305;version='[3.0.2,3.0.3)',\
+	org.eclipse.fennec.openapi.osgi;version=snapshot

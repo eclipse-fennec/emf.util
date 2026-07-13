@@ -65,10 +65,28 @@ public final class OpenApiServiceClient implements ServiceClient {
 	private final Map<String, String> defaultHeaders = new LinkedHashMap<>();
 	private final Map<String, OpenApiAuth> auth = new LinkedHashMap<>();
 
+	/**
+	 * Creates a client backed by a private, isolated {@link MetadataWhiteboard} — the right
+	 * choice for plain-Java use, where each client owns its own metadata registry.
+	 */
 	public OpenApiServiceClient(java.net.URI baseUri, OpenApiModel model) {
+		this(baseUri, model, MetadataServiceFactory.create());
+	}
+
+	/**
+	 * Creates a client backed by the supplied {@link MetadataWhiteboard} — e.g. the one an OSGi
+	 * runtime provides as a shared service. The model's generated {@code schemas}/{@code requests}
+	 * {@link org.eclipse.emf.ecore.EPackage EPackage}s are registered into it.
+	 * <p>
+	 * <b>Caller contract when the whiteboard is shared:</b> the importer stamps the generated
+	 * packages with <em>constant</em> nsURIs, and {@code registerPackage} keys by nsURI — so two
+	 * clients sharing one whiteboard must first give their generated packages nsURIs unique to the
+	 * document, or the second silently (de)serializes against the first's metadata. The private
+	 * two-arg constructor sidesteps this by never sharing.
+	 */
+	public OpenApiServiceClient(java.net.URI baseUri, OpenApiModel model, MetadataWhiteboard whiteboard) {
 		this.baseUri = baseUri;
 		this.model = model;
-		MetadataWhiteboard whiteboard = MetadataServiceFactory.create();
 		if (model.schemasPackage() != null) {
 			whiteboard.registerPackage(model.schemasPackage());
 		}

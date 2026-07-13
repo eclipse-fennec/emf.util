@@ -81,6 +81,7 @@ class PetstoreRemoteTest {
 
 	@Test
 	@DisplayName("reads a seeded pet via the synthetic path-parameter request (api_key auth)")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void readsSeededPet() {
 		OpenApiOperation getPet = (OpenApiOperation) model.operation("getPetById");
 		// getPetById requires api_key OR petstore_auth; "special-key" is the petstore's test key
@@ -104,6 +105,7 @@ class PetstoreRemoteTest {
 
 	@Test
 	@DisplayName("creates a pet and reads it back (skipped while the public write path is down)")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
 	void createAndReadPet() {
 		// addPet requires petstore_auth (oauth2 implicit — interactive); the petstore accepts any
 		// bearer token, which exercises the bearer-on-oauth2 path against a real endpoint
