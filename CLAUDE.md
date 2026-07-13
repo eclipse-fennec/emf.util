@@ -37,8 +37,8 @@ use the Gradle wrapper.
 - Unit tests: JUnit 5 + Mockito + AssertJ. OSGi tests run in a real framework via the
   bnd launcher (`*.bndrun`).
 - **`coverageFloorBundles`** in `build.gradle` is a 30%-instruction JaCoCo tripwire wired
-  into `check`. It is currently **empty**; add each utility's core bundle as it gains
-  plain-JUnit tests.
+  into `check` (currently `org.eclipse.fennec.protobuf`); add each utility's core bundle as
+  it gains plain-JUnit tests.
 - License headers (EPL-2.0) are enforced in CI (`apache/skywalking-eyes`, config
   `.licenserc.yaml`). Many file types are exempt (see `paths-ignore`, incl.
   `**/src-gen/**`, `**/generated/**`, `cnf/**`).
@@ -84,9 +84,13 @@ VitePress site in `docs-site/`, published to `https://eclipse-fennec.github.io/e
 - **Flow:** PRs merge into **`snapshot`** (snapshot artifacts published from there);
   releases are cut from the protected **`main`** branch. Releases publish to Maven Central
   (Sonatype), driven by GitHub Actions (`-releaserepo` is intentionally not overridden).
-- **Workflows** (`.github/workflows/`): `build` (PRs + feature branches), `snapshot`
-  (publish on `snapshot`), `release` (publish on `main`), `license`, `docs`, `scorecard`
-  (OpenSSF), `dependency-review`.
+- **Workflows** (`.github/workflows/`). `snapshot` (push to `snapshot`) and `release`
+  (push to `main`) are **orchestrators** with gated jobs — `license → build (+testOSGi
+  +publish) → docs → deploy` via `needs:` — so a failed license check or build stops the
+  publish AND the docs deploy. `build` runs on PRs + feature branches; `license` runs on
+  PRs + feature branches (the orchestrators run it as their first job on `main`/`snapshot`
+  to avoid a duplicate); `docs` is `workflow_dispatch`-only (the auto docs build/deploy is a
+  job in the orchestrators); plus `scorecard` (OpenSSF) and `dependency-review`.
 - **Hardening (in-repo):** top-level `permissions: contents: read` with minimal per-job
   escalation, `step-security/harden-runner`, all actions **SHA-pinned** with `# vX.Y.Z`
   comments, `concurrency` groups. `.github/dependabot.yml` keeps github-actions, gradle,
@@ -96,25 +100,160 @@ VitePress site in `docs-site/`, published to `https://eclipse-fennec.github.io/e
 
 ## EMF ⇄ Protobuf (first utility)
 
-Bundles: `org.eclipse.fennec.protobuf` (core, plain Java), `org.eclipse.fennec.protobuf.osgi`
-(the `Resource.Factory` service), and `org.eclipse.fennec.protobuf.osgi.tests` (a `testOSGi`
+Bundles: `org.eclipse.fennec.protobuf` (runtime core, plain Java), `org.eclipse.fennec.protobuf.ecore`
+(the descriptor→Ecore **importer**, a separate design-time bundle), `org.eclipse.fennec.protobuf.osgi`
+(the `Resource.Factory` service) and `org.eclipse.fennec.protobuf.osgi.tests` (a `testOSGi`
 integration test that launches Felix and proves the factory registers + `.protobin` load/save
 works through a Fennec `ResourceSet`). In the core, the descriptor/(de)serialization API is in
-package `org.eclipse.fennec.protobuf`, while `ProtobufResource` + `ProtobufResourceFactory`
-live in `org.eclipse.fennec.protobuf.resource`. Both packages are exported.
+package `org.eclipse.fennec.protobuf` and `ProtobufResource` + `ProtobufResourceFactory` live in
+`org.eclipse.fennec.protobuf.resource`; the importer (`ProtobufImporter` + `ImportOptions`) is the
+`org.eclipse.fennec.protobuf.ecore` package in its own bundle. Package exports/versions are driven
+by `@Export`/`@Version` on `package-info.java` (not `Export-Package` in `bnd.bnd`); the `.osgi`
+bundle is the exception — it `Export-Package`s (inlines) the runtime packages so it is
+self-contained/standalone (no separate core bundle needed at runtime), mirroring SOAP.
 
 Schema-driven (de)serialization of EMF **instances** to Google Protocol Buffers, with
 descriptors built **from the `EPackage`** via `DescriptorProtos` + `Descriptors.FileDescriptor`
 + `DynamicMessage` (no `protoc`, no generated classes). Scope: instance (de)serialization
-**+ `.proto` schema export**. `.proto` schema *import* is out of scope (protobuf-java has
-no `.proto` text parser). Key mapping decisions (see `docs/protobuf-user-guide.md`):
+**+ `.proto` schema export** **+ descriptor→Ecore import**. `.proto` *text* import is out of
+scope (protobuf-java has no text parser), but `ProtobufImporter.fromDescriptorSet(byte[])`
+derives dynamic `EPackage`s from a compiled `FileDescriptorSet` (`protoc --include_imports
+--descriptor_set_out`) — for interop / bootstrapping. It is deliberately **structural** and
+lossy (flat EClasses, every message field → containment, `int32`/`string` not re-widened,
+`uint64`→`ELong`); field numbers are preserved as annotations. Key mapping decisions (see
+`docs/protobuf-user-guide.md`):
 
-- **Field numbers** from an `EAnnotation` (source `http://www.eclipse.org/fennec/protobuf`,
+- **Field numbers** from an `EAnnotation` (source `http://eclipse.org/fennec/protobuf`,
   key `fieldNumber`) — wire-stable; `getFeatureID()` is deliberately NOT used.
-- Containment `EReference` → embedded message; non-containment → URI-fragment reference;
-  inheritance → flattened (polymorphism via `oneof`); `isMany` → `repeated`; unset-vs-default
-  → proto3 `optional`. `EBigInteger`/`EBigDecimal` → `string`.
+- Containment `EReference` → embedded message; non-containment → URI reference; `isMany` →
+  `repeated`; unset-vs-default → proto3 `optional`; `EBigInteger`/`EBigDecimal` → `string`.
+- Polymorphism / cross-package / subpackage / `EObject` refs → an `EObjectAny`/`EObjectRef`
+  wrapper carrying a type discriminator (strategy `NAME` default, `URI`, `NUMERIC`;
+  `smartCompression` on), resolved via the package registry; the nested object is serialized
+  against its own package's schema. Config via `ProtobufContext` / `ProtobufResource` options
+  or `EAnnotation` — feature filters `ignore`/`ignoreWrite`/`ignoreRead`/`forceWrite`/`forceRead`.
+  Property names + annotation source (`http://eclipse.org/fennec/protobuf`) mirror the Fennec Codec.
 - OSGi integration = a `Resource.Factory` annotated `@Component` + `@EMFConfigurator(
   configuratorType = RESOURCE_FACTORY, fileExtension=…, contentType=…)`, depending only on
   `org.eclipse.fennec.emf.osgi.api`; the `DefaultResourceFactoryRegistryComponent`
   whiteboard binds it automatically.
+
+## SOAP / WSDL (second utility)
+
+Bundles: `org.eclipse.fennec.soap` (runtime core, plain Java), `org.eclipse.fennec.soap.ecore`
+(the WSDL/XSD→Ecore **converter**, a separate design-time bundle), `org.eclipse.fennec.soap.osgi`
+(the `Resource.Factory` service) and `org.eclipse.fennec.soap.osgi.tests`. Same shape as Protobuf:
+an importer plus a `Resource` that (de)serializes payloads — here through a **SOAP 1.1 envelope as
+XML**. See `docs/soap-user-guide.md`.
+
+- **Reuses the SOAP model**, does not rebuild it: bundle `org.xmlsoap.model` (group
+  `org.eclipse.fennec.models`, package `org.xmlsoap.schemas.envelope`, SOAP 1.1), consumed via
+  the already-enabled `fennecEMFModels` bnd library. The `Body` payload rides in its wildcard
+  **`FeatureMap`** (`xsd:any`, lax) — not a typed reference.
+- **Converter is its own bundle `org.eclipse.fennec.soap.ecore`** (package
+  `org.eclipse.fennec.soap.ecore`) — deliberately split from the runtime because it needs
+  `org.eclipse.xsd`, whose *greedy* optional `Require-Bundle` on `org.eclipse.core.runtime` does not
+  resolve in a minimal Felix. So the runtime (`org.eclipse.fennec.soap`) has **no XSD dependency at
+  all** and resolves cleanly; only consumers doing design-time WSDL import pull in the converter +
+  `org.eclipse.xsd`. Dependency direction: `soap.ecore` → `soap` (for `SoapException`); the runtime
+  never depends on the converter. (The workspace library ships only the runtime bundles, not the
+  converter.)
+- **`WsdlImporter`** (`fromWsdl`/`fromXsd` → `WsdlModel` with `EPackage`s + `SoapOperation`s). Types
+  come from EMF's **`XSDEcoreBuilder`** (whose `XSDResourceImpl` also extracts schemas embedded in
+  `<wsdl:types>`); the generated Ecore carries `ExtendedMetaData` for XML round-tripping. WSDL
+  *operation* semantics aren't modelled by EMF, so a light DOM parse of `portType`/`operation` +
+  `message`/`part` resolves each operation to its request/response `EClass` (document/literal).
+  Attribute types are the EMF XML datatypes (`String`/`Int`/… from `org.eclipse.emf.ecore.xml.type`),
+  not the Ecore `E*` types.
+- **`SoapResource` / `SoapResourceFactory`** (`org.eclipse.fennec.soap.resource`, extension
+  `.soap`, content type `application/soap+xml`): `save` wraps the content EObjects (copies) in an
+  `Envelope`/`Body` and serializes via an EMF `XMLResource` **with `OPTION_EXTENDED_META_DATA`**
+  (essential — otherwise EMF ignores the XSD element/namespace metadata); `load` unwraps `Body`
+  content back into the contents. An incoming SOAP `Fault` is recorded via `getErrors()` and thrown
+  as `IOException`. The carrier `XMLResource` shares the resource set's package registry (payload
+  `EPackage`s must be registered — `WsdlModel.registerInto(resourceSet)`); the envelope package is
+  auto-registered.
+- **OSGi integration test** `org.eclipse.fennec.soap.osgi.tests` (Felix, via the bnd launcher):
+  proves the factory is service-registered and wired into a Fennec `ResourceSet`, plus an empty
+  envelope round-trip. Core mapping is covered by plain-JUnit (`WsdlImporterTest`,
+  `SoapResourceTest`). **Gotcha:** an `.osgi.tests` bundle needs a tiny per-project `build.gradle`
+  that points `testOSGi` at the *resolved* bndrun, else `./gradlew testOSGi` launches the raw
+  bndrun and fails to assemble the framework runpath (`NoClassDefFoundError:
+  org/osgi/framework/ServiceListener`):
+  ```gradle
+  def resolveTask = tasks.named("resolve.test") { outputBndrun = layout.buildDirectory.file("test.bndrun") }
+  tasks.named("testOSGi") { bndrun = resolveTask.flatMap { it.outputBndrun } }
+  ```
+  The plain-JUnit test bundles also need `-testpath: assertj-core;version=latest` in their `bnd.bnd`
+  for the IDE/bnd compile.
+
+## Service client API (third strand)
+
+`org.eclipse.fennec.service.api` — the **protocol-agnostic client face**: `ServiceClient`
+(`operations()`, `invoke(op, EObject) → EObject`, `unwrap(nativeType)`, `close`),
+`ServiceOperation` (name + request/response `EClass`), `ServiceInvocationException`. The importers'
+operation descriptors implement `ServiceOperation`; per-protocol clients implement `ServiceClient`
+(a future `InvocationDelegate`/DDSR-flavor engine is an implementation detail *behind* this face —
+see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture).
+
+- **`org.eclipse.fennec.soap.client`** — `SoapServiceClient` (JDK `HttpClient` + `SoapResource`
+  marshalling; `withSoapAction`). Tested end-to-end against a local JDK `HttpServer`.
+- **`org.eclipse.fennec.openapi.ecore`** — `OpenApiImporter`: loads the document via the
+  **fennecCodec pipeline** (`OpenApiResourceFactoryImpl`; `components/schemas` → `EPackage` happens
+  during load, read via `components.getSchemasPackage()`), then links path operations to EClasses.
+  Parameters fold into a **synthetic request EClass** (`<Name>Request`, features annotated
+  `in=path|query|header|cookie|body`, source `http://eclipse.org/fennec/openapi`); body-only ops use
+  the body EClass directly; array responses resolve to the item EClass + `responseMany` (client v1
+  rejects them). `components/securitySchemes` → `model.securitySchemes()` (raw model objects);
+  each operation carries its **effective** requirements (`operation.security()`, own → global
+  fallback) as plain `List<Map<schemeName, scopes>>` (alternatives = OR, entries = AND).
+  **Requires a fennecCodec snapshot ≥ 2026-07-10**: older ones left schema-to-schema `$ref`
+  features untyped (emf.codec#43) and dropped security-requirement scheme names (emf.codec#44) —
+  both fixed upstream after emf.util filed the issues; the importer keeps only a safety net
+  (`ensureTypedFeatures`: unresolvable `$ref` → `EObject`/`EString` + diagnostic, else
+  `MetadataService.registerPackage` NPEs). Note: the `CODEC_FEATURE_VALUE_READERS` runtime option
+  is still a no-op placeholder for references (emf.codec#45).
+- **`org.eclipse.fennec.openapi.client`** — `OpenApiServiceClient` (JDK `HttpClient` + codec JSON).
+  Serializes **without** the EMF type discriminator (`CodecOptions.CODEC_TYPE_INCLUDE=false`) —
+  with `_type` on the wire real servers reject the body. Deserializes with
+  `CodecResource.CODEC_ROOT_TYPE` = the operation's response EClass. **Auth:** `OpenApiAuth`
+  credentials registered per scheme name (`withAuth`; single-scheme convenience overload) —
+  `apiKey` / `basic` / `bearer(Supplier)` / `clientCredentials` (token from the flow's `tokenUrl`,
+  cached until `expires_in`). Placement (header/query/cookie, names, tokenUrl) comes from the
+  document; first satisfiable requirement alternative wins, empty alternative = anonymous OK,
+  required-but-unregistered fails fast before HTTP. `authorization_code`/OIDC discovery
+  deliberately out of scope (headless).
+- **Dependency gotcha:** BSN `org.eclipse.fennec.model.metadata` exists from TWO sources
+  (fennecCodec 0.1.0 with `api.MetadataService`, fennecEMFMetadata 1.0.0 without) — pin
+  `version="[0.1,0.2)"` on build/test paths or `version=latest` picks the wrong one.
+- **Remote tests** (`@Tag("remote")`, excluded from `build`; run `./gradlew remoteTest`): validate
+  the design against public endpoints (Swagger petstore). Server-side outages are JUnit
+  *assumptions* (skips), not failures. With `api_key`/bearer auth registered, all three petstore
+  tests pass (2026-07-10) — including the write path that previously answered HTTP 500.
+- **`org.eclipse.fennec.grpc`** — gRPC client **and** server in one runtime bundle (packages
+  `…grpc.client`, `…grpc.server`, shared `…grpc.BareMarshaller`). `GrpcServiceClient` over an
+  `io.grpc` `Channel`: the operations are the `GrpcMethod`s of a `ProtobufImport` (`GrpcMethod`
+  implements `ServiceOperation`); EObjects ride as **bare** Protobuf messages via
+  `ProtobufSchema.forPackage(...).writer().toBareBytes(...)` / `.reader().readBare(...)` — no
+  protoc, no generated stubs, no DynamicMessage on the caller side. Lookup by full
+  (`pkg.Service/Method`) or simple method name; `withDeadline(Duration)`; gRPC status →
+  `ServiceInvocationException`; v1 unary only (streaming rejected with clear error).
+  `GrpcServiceServer.forService(grpcService).unary(name, handler).definition()` yields a
+  **transport-agnostic** `ServerServiceDefinition` (handler `StatusRuntimeException` passes
+  through, other exceptions → INTERNAL; unregistered methods → UNIMPLEMENTED). Tested in-process
+  (client + server) AND over a real Netty HTTP/2 localhost connection (`NettyRoundTripTest`).
+  gRPC-over-servlet (port-sharing with Jetty/whiteboard) is possible via the experimental
+  `grpc-servlet-jakarta` but hinges on container HTTP/2 + trailers (h2c prior-knowledge) — not
+  validated yet, Netty is the recommended transport. **Dependency decision:** grpc-java jars
+  from Central on build/test paths only (they carry NO OSGi metadata; upstream issue #1565 open
+  since 2016) — at OSGi runtime the `io.grpc.core` + `io.grpc.netty` wrap bundles from
+  `org.gecko.libraries` provide the packages (io.grpc.core merges
+  api/core/stub/protobuf/protobuf-lite/util — `io.grpc` is a split package upstream and
+  grpc-util's LoadBalancers are ServiceLoader-discovered; the transport is found via grpc's
+  Class.forName fallback, no SPI-Fly). The wraps are published as
+  `org.geckoprojects.libraries:io.grpc.core`/`io.grpc.netty` (central.sonatype.com snapshots,
+  in `central.mvn`); the workspace library requires `org.eclipse.fennec.grpc` + `io.grpc.netty`,
+  so consumers get the full closure incl. the official `io.netty.*` bundles +
+  guava/gson/jsr305.
+- **Next:** OData; the `SoapOperation`/`GrpcService`-`GrpcMethod`/`OpenApiOperation` descriptors
+  are the decision-neutral raw material for the later `EOperation`-vs-DDSR projection.
