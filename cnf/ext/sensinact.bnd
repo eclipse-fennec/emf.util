@@ -1,0 +1,10 @@
+sensinact.version: 0.0.2-SNAPSHOT
+
+-plugin.3.sensinact: \
+	aQute.bnd.repository.maven.provider.MavenBndRepository;\
+		releaseUrl=https://repo.eclipse.org/content/repositories/sensinact-releases/;\
+		snapshotUrl=https://repo.eclipse.org/content/repositories/sensinact-snapshots/;\
+		index=${.}/sensinact.maven;\
+		readOnly=true;\
+        poll.time=10;\
+		name="SensiNact SDK"

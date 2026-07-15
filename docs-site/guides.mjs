@@ -12,6 +12,7 @@ export const GUIDES = [
   { file: 'soap-user-guide.md', slug: 'soap', title: 'EMF ⇄ SOAP / WSDL' },
   { file: 'openapi-user-guide.md', slug: 'openapi', title: 'EMF ⇄ OpenAPI / REST' },
   { file: 'service-clients.md', slug: 'service-clients', title: 'Service clients' },
+  { file: 'sensinact-mapping-user-guide.md', slug: 'sensinact-mapping', title: 'SensiNact mapping' },
   { file: 'workspace-library.md', slug: 'consuming', title: 'Consuming (fennecUtil)' },
 ];
 

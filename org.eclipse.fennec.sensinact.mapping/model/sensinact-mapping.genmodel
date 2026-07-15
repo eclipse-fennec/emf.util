@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel" copyrightText="Copyright (c) 2012 - 2025 Data In Motion and others.&#xA;All rights reserved. &#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;     Mark Hoffmann - initial API and implementation"
+    modelDirectory="/org.eclipse.fennec.sensinact.model.mapping/src" editDirectory="/org.eclipse.fennec.sensinact.model.mapping.edit/src"
+    editorDirectory="/org.eclipse.fennec.sensinact.model.mapping.editor/src" modelPluginID="org.eclipse.fennec.sensinact.model.mapping"
+    modelName="Sensinact-mapping" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
+    importerID="org.eclipse.emf.importer.ecore" complianceLevel="17.0" copyrightFields="false"
+    editPluginID="org.eclipse.fennec.sensinact.model.mapping.edit" editorPluginID="org.eclipse.fennec.sensinact.model.mapping.editor"
+    operationReflection="true" importOrganizing="true" oSGiCompatible="true">
+  <foreignModel>sensinact-mapping.ecore</foreignModel>
+  <genPackages prefix="Mapping" basePackage="org.eclipse.fennec.sensinact.model" resource="XMI"
+      disposableProviderFactory="true" ecorePackage="sensinact-mapping.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="sensinact-mapping.ecore#//TimestampStrategy">
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//TimestampStrategy/NOW"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//TimestampStrategy/FEATURE"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//TimestampStrategy/FUNCTION"/>
+    </genEnums>
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="sensinact-mapping.ecore#//ProviderStrategy">
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//ProviderStrategy/SEPARATE"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//ProviderStrategy/UNIFIED"/>
+    </genEnums>
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="sensinact-mapping.ecore#//DurationUnit">
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//DurationUnit/MILLISECONDS"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//DurationUnit/SECONDS"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//DurationUnit/MINUTES"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//DurationUnit/HOURS"/>
+      <genEnumLiterals ecoreEnumLiteral="sensinact-mapping.ecore#//DurationUnit/DAYS"/>
+    </genEnums>
+    <genDataTypes ecoreDataType="sensinact-mapping.ecore#//EInstant"/>
+    <genDataTypes ecoreDataType="sensinact-mapping.ecore#//JavaStringFunction"/>
+    <genDataTypes ecoreDataType="sensinact-mapping.ecore#//JavaInstantFunction"/>
+    <genDataTypes ecoreDataType="sensinact-mapping.ecore#//JavaObjectFunction"/>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//MappingProfile">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//MappingProfile/profileId"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//MappingProfile/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//MappingProfile/description"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//MappingProfile/version"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//MappingProfile/providerStrategy"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//MappingProfile/provider"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ProfileProvider">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileProvider/providerId"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProfileProvider/services"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProfileProvider/admin"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ProfileService">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileService/serviceId"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileService/serviceName"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileService/required"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProfileService/resources"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ProfileResource">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileResource/resourceId"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileResource/resourceName"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileResource/required"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProfileResource/expectedType"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileResource/expectedUnit"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ProfileAdmin">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileAdmin/requiresLocation"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProfileAdmin/requiresFriendlyName"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ProviderMapping">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProviderMapping/providerClasses"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProviderMapping/services"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProviderMapping/admin"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ProviderMapping/providerTimestamp"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ProviderMapping/profile"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ServiceMapping">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ServiceMapping/resources"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ServiceMapping/referencedResource"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ServiceMapping/temporaryResources"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ResourceMapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ResourceMapping/unit"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/unitFeature"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/valueFeature"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/timestamp"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ResourceMapping/mid"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/extraMetadata"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/descriptionMapping"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/changeRule"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ResourceMapping/deletionRule"/>
+      <genOperations ecoreOperation="sensinact-mapping.ecore#//ResourceMapping/mapUnit"
+          body="&lt;%java.util.Objects%>.requireNonNull(unitFunction);&#xA;Objects.requireNonNull(eobject);&#xA;setUnit(unitFunction.apply(eobject));">
+        <genParameters ecoreParameter="sensinact-mapping.ecore#//ResourceMapping/mapUnit/eobject"/>
+        <genParameters ecoreParameter="sensinact-mapping.ecore#//ResourceMapping/mapUnit/unitFunction"/>
+      </genOperations>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//AdminMapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//AdminMapping/friendlyName"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//AdminMapping/friendlyNameFeature"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//AdminMapping/providerPackage"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//AdminMapping/latitude"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//AdminMapping/longitude"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//AdminMapping/elevation"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//AdminMapping/latitudeRef"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//AdminMapping/longitudeRef"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//AdminMapping/elevationRef"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//MetadataMapping"/>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//Mapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//Mapping/mid"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//Mapping/timestamp"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//Mapping/name"/>
+      <genFeatures property="Readonly" createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//Mapping/fqMid"
+          get="if (&lt;%java.util.Objects%>.nonNull(eContainer())) {&#xA;  String fqId = ((Mapping)eContainer()).getFqMid();&#xA;  Objects.requireNonNull(fqId);&#xA;  return fqId += &quot;.&quot; + getMid();&#xA;} else {&#xA;  return getMid();&#xA;}"/>
+      <genOperations ecoreOperation="sensinact-mapping.ecore#//Mapping/mapId" body="&lt;%java.util.Objects%>.requireNonNull(idFunction);&#xA;Objects.requireNonNull(eobject);&#xA;setMid(idFunction.apply(eobject));">
+        <genParameters ecoreParameter="sensinact-mapping.ecore#//Mapping/mapId/idFunction"/>
+        <genParameters ecoreParameter="sensinact-mapping.ecore#//Mapping/mapId/eobject"/>
+      </genOperations>
+      <genOperations ecoreOperation="sensinact-mapping.ecore#//Mapping/mapName" body="&lt;%java.util.Objects%>.requireNonNull(nameFunction);&#xA;Objects.requireNonNull(eobject);&#xA;NameMapping name = &lt;%org.eclipse.fennec.sensinact.model.mapping.MappingFactory%>.eINSTANCE.createNameMapping();&#xA;name.setName(nameFunction.apply(eobject));&#xA;setName(name);">
+        <genParameters ecoreParameter="sensinact-mapping.ecore#//Mapping/mapName/nameFunction"/>
+        <genParameters ecoreParameter="sensinact-mapping.ecore#//Mapping/mapName/eobject"/>
+      </genOperations>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//FeatureMapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//FeatureMapping/functionId"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//FeatureMapping/featurePath"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//FeatureMapping/collectionIndex"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//FeatureMapping/collectionFilter"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//TimestampMapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//TimestampMapping/strategy"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//TimestampMapping/timestamp"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//TimestampMapping/hint"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//NameMapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//NameMapping/name"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ValueMapping">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ValueMapping/value"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//StringToStringMap">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//StringToStringMap/key"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//StringToStringMap/value"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//ReferenceMapping">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ReferenceMapping/filter"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//ReferenceMapping/exclude"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ReferenceMapping/referenceMappings"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//ReferenceMapping/targetEClass"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//PersistenceRuleRegistry">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//PersistenceRuleRegistry/changeRules"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference sensinact-mapping.ecore#//PersistenceRuleRegistry/deletionRules"/>
+    </genClasses>
+    <genClasses image="false" ecoreClass="sensinact-mapping.ecore#//PersistenceRule">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//PersistenceRule/id"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//PersistenceRule/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//PersistenceRule/description"/>
+    </genClasses>
+    <genClasses image="false" ecoreClass="sensinact-mapping.ecore#//ChangeRule"/>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//PercentageChangeRule">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//PercentageChangeRule/percentage"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//AbsoluteChangeRule">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//AbsoluteChangeRule/delta"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//CountChangeRule">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//CountChangeRule/n"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//TimeThrottleChangeRule">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//TimeThrottleChangeRule/interval"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//TimeThrottleChangeRule/intervalUnit"/>
+    </genClasses>
+    <genClasses ecoreClass="sensinact-mapping.ecore#//DeletionRule">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//DeletionRule/retention"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//DeletionRule/retentionUnit"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//DeletionRule/cleanupInterval"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//DeletionRule/cleanupIntervalUnit"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute sensinact-mapping.ecore#//DeletionRule/maxCount"/>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>
