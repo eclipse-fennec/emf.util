@@ -74,5 +74,6 @@ header:
     - 'settings.gradle'
     - 'old/**'
     - 'docs-site/**'
+	- '**/*.dragino'
 
   comment: always
