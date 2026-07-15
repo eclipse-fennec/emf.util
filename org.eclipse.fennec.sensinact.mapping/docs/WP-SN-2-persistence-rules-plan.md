@@ -25,12 +25,87 @@ provider:
    downstream to the history provider or **drop** it.
 
 **WP-SN-2 (this plan) is model-only** — the Ecore just has to *carry* the rules. The proxy
-is a later WP. Two things to spike when we get there:
+is a later, separate WP. The design investigation below is done; it is the starting point for
+that WP.
 
-- Exactly how the timescale provider subscribes to notifications, so the proxy can sit
-  strictly upstream of it.
-- Whether deletion/cleanup has a command path — `history-api` currently exposes only the
-  read side (`HistoricalQueries`).
+### How SensiNact delivers notifications today (investigated against `org.eclipse.sensinact.gateway`)
+
+1. The twin publishes every change through `NotificationAccumulatorImpl` /
+   `ImmediateNotificationAccumulator` (`core/impl/.../notification/impl/`) via
+   `TypedEventBus.deliver(topic, notification)`.
+2. The event is a `ResourceDataNotification` record
+   (`core/api/.../notification/ResourceDataNotification.java`): `modelPackageUri, model,
+   provider, service, resource, oldValue, newValue, timestamp, type, metadata`.
+3. Topic format is **`DATA/<model>/<provider>/<service>/<resource>`**.
+4. The timescale store (`southbound/history/timescale-provider/.../TimescaleHistoricalStore.java`)
+   registers a `TypedEventHandler<ResourceDataNotification>` on
+   `TYPED_EVENT_TOPICS = include.dataTopics()`.
+5. `TimescaleDatabaseWorker.notify()` applies `include`/`exclude` and inserts.
+
+### The constraint (why a transparent interceptor does NOT work)
+
+- **The bus is fan-out pub/sub.** If our proxy and the timescale handler both subscribe to
+  `DATA/*`, each receives every event independently — the proxy cannot suppress delivery to
+  the stock handler.
+- **The handler's topics are `DATA/`-locked.** `ICriterion.dataTopics()` defaults to
+  `List.of("DATA/*")` and is always built from resource selectors — there is no config to
+  point the timescale handler at a private `HISTORY/*` namespace we could republish to.
+- **The only existing filter seam is stateless.** `include`/`exclude` are `ICriterion` (topic
+  + value predicates) from `include_resources`/`exclude_resources` config — no service hook,
+  and no way to express stateful "delta vs last stored / throttle / every-Nth".
+
+So we cannot sit between the twin and the stock timescale handler on the same bus without
+either changing that handler or replacing it.
+
+### Two viable shapes for the Notification Proxy
+
+**Option A — upstream hook (recommended): reuse the stock store, small sensinact contribution.**
+Add a pluggable, *stateful* storage-decision SPI to the timescale provider, e.g. an optional
+`@Reference` to a `HistoryStorageFilter` service consulted in `TimescaleDatabaseWorker.notify()`
+right after the include/exclude block (~line 162), and passed in from
+`TimescaleHistoricalStore`. Sketch:
+
+```java
+public interface HistoryStorageFilter {
+    /** @return true to store this update, false to drop it. */
+    boolean shouldStore(ResourceDataNotification event);
+}
+```
+
+Our emf.util bundle implements it using `ProviderMappingRegistry`
+(model/provider/service/resource → `ResourceMapping` → `changeRule`), keeping per-triple state
+(last-stored value, counter, last-store time) in the service — `ResourceDataNotification`
+carries old/new, but our rules compare against the last *stored* value. A matching purge/retention
+hook belongs here too. Surgical PR, keeps their DB/schema; the natural home.
+
+**Option B — own rule-aware store (no sensinact changes): more work, we own persistence.**
+A new emf.util runtime bundle registers its own `TypedEventHandler<ResourceDataNotification>`
+on `DATA/*`, applies the rules statefully, and writes surviving samples itself (reusing the
+Timescale schema or a store of our own); the stock timescale handler is disabled. This
+duplicates their store/queries — brittle, higher maintenance.
+
+### Deletion is the tie-breaker
+
+`history-api` exposes only `HistoricalQueries` (read side) — there is **no purge API** on the
+bus or in the API. Retention/cleanup therefore requires either (A) a purge command added
+upstream, or (B) owning the store. This pushes strongly toward **Option A**.
+
+### Recommendation
+
+Pursue **Option A**: propose a small `HistoryStorageFilter` (`shouldStore`) + a
+retention/purge hook in the timescale provider upstream, and implement both in a new emf.util
+runtime bundle backed by `ProviderMappingRegistry` + the persistence rules. Fall back to
+Option B only if upstream changes are not acceptable/timely.
+
+### Seam locations (for the handover)
+
+- Gate point: `southbound/history/timescale-provider/.../TimescaleDatabaseWorker.java`,
+  `notify()` ~line 162 (after include/exclude, before insert).
+- Wiring + retention scheduler: `.../TimescaleHistoricalStore.java` (add the optional
+  `@Reference`, pass to the worker; host the purge cadence).
+- Our side: a new bundle (e.g. `org.eclipse.fennec.sensinact.mapping.history`) implementing
+  `HistoryStorageFilter`, depending only on the sensinact history/notification API +
+  `ProviderMappingRegistry`.
 
 ## Scope for this first cut
 
@@ -238,7 +313,8 @@ Remaining for a later pass:
   parameter) at mapping registration in `ProviderMappingRegistry` for a friendly error. The
   required parameters are already structural (`lowerBound=1`), but nothing runs validation yet.
 - **Notification proxy** (separate runtime WP) — consume the rules to forward/drop
-  notifications and to purge history per retention.
+  notifications and to purge history per retention. **Design investigated — see the Runtime
+  architecture section above (Options A/B, recommendation, seam locations).**
 
 ## Deferred / open questions
 
@@ -248,9 +324,9 @@ Remaining for a later pass:
   is resource-level only.
 - **More deletion strategies** — if retention-only is not enough, add `DeletionRule`
   subtypes (mirroring the change-rule design).
-- **Deletion execution path** — depends on whether the history provider exposes a
-  purge/cleanup command; `history-api` currently exposes only the read side
-  (`HistoricalQueries`). Needs a spike in the runtime WP.
+- **Deletion execution path** — confirmed: `history-api` exposes only `HistoricalQueries`
+  (read side), no purge API. Resolved by the runtime section above (add a purge hook upstream
+  under Option A, or own the store under Option B).
 - **Periodic sampling** (force a store every interval even with no change) —
   `TimeThrottleChangeRule` only throttles existing changes; true sampling needs a scheduler,
   out of scope.
