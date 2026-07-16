@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sens:SensinactProvider xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sens="https://eclipse.org/sensinact/1.0" id="moisture">
+  <setups href="data/ProviderSetup01.xmi#provSensorA"/>
+  <setups href="data/ProviderSetup02.xmi#provSensorB"/>
+  <services id="moisturePercent" name="Feuchtigkeit in %">
+    <resources id="moistValue" name="Feuchtigkeitswert ">
+      <metadata unit="%"/>
+    </resources>
+  </services>
+  <services id="moistureLast10Days" name="durchschn. Feuchtigkeit in % der letzten 10 Tage">
+    <resources id="moistValue10Days" name="Feuchtigkeit 10 Tage">
+      <metadata unit="%"/>
+    </resources>
+  </services>
+</sens:SensinactProvider>

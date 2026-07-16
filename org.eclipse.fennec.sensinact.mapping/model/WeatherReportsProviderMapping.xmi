@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sensinactMapping:ProviderMapping
+    xmi:version="2.0"
+    xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:sensinactMapping="https://fennec.eclipse.org/sensinact/core/mapping/1.0"
+    xsi:schemaLocation="https://fennec.eclipse.org/sensinact/core/mapping/1.0 sensinact-mapping.ecore"
+    mid="dwd-weather-reports"
+    providerTimestamp="false">
+
+  <!-- Provider name extracted from first report's weather station ID -->
+  <name collectionIndex="0">
+    <featurePath
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+    <featurePath
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReport/weatherStation"/>
+    <featurePath
+        xsi:type="ecore:EAttribute"
+        href="http://cdc.dwd.de/common/weather#//WeatherStation/id"/>
+  </name>
+
+  <!-- Source type is WeatherReports container -->
+  <providerClasses
+      href="http://cdc.dwd.de/common/weather#//WeatherReports"/>
+
+  <!-- Admin service - uses first report (index 0) -->
+  <admin
+      xsi:type="sensinactMapping:AdminMapping"
+      mid="admin"
+      collectionIndex="0">
+    <timestamp
+        strategy="FEATURE">
+      <featurePath
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//WeatherReport/timestamp"/>
+    </timestamp>
+    <name name="Admin"/>
+    <collectionFeature
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+    <friendlyNameFeature
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReport/station"/>
+    <friendlyNameFeature
+        xsi:type="ecore:EAttribute"
+        href="http://cdc.dwd.de/common/weather#//Station/name"/>
+    <providerPackage
+        href="http://cdc.dwd.de/common/weather#/"/>
+    <latitudeRef
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReport/station"/>
+    <latitudeRef
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//Station/location"/>
+    <latitudeRef
+        xsi:type="ecore:EAttribute"
+        href="http://cdc.dwd.de/common/weather#//GeoPosition/latitude"/>
+    <longitudeRef
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReport/station"/>
+    <longitudeRef
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//Station/location"/>
+    <longitudeRef
+        xsi:type="ecore:EAttribute"
+        href="http://cdc.dwd.de/common/weather#//GeoPosition/longitude"/>
+  </admin>
+
+  <!-- Current Weather service - maps from reports[0] -->
+  <services
+      mid="currentWeather"
+      collectionIndex="0">
+    <timestamp
+        strategy="FEATURE">
+      <featurePath
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//WeatherReport/timestamp"/>
+    </timestamp>
+    <name name="Current Weather"/>
+    <collectionFeature
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+
+    <!-- Wind resources -->
+    <resources
+        name="windSpeed"
+        changeable="false"
+        unit="m/s"
+        mid="windSpeed">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/windSpeed"/>
+    </resources>
+    <resources
+        name="windDirection"
+        unit="degrees"
+        mid="windDirection">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/windDirection"/>
+    </resources>
+    <resources
+        name="windGustLastHour"
+        unit="m/s"
+        mid="windGustLastHour">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/windGustLastHour"/>
+    </resources>
+
+    <!-- Cloud resources -->
+    <resources
+        name="cloudCoverTotal"
+        unit="%"
+        mid="cloudCoverTotal">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/cloudCoverTotal"/>
+    </resources>
+
+    <!-- Pressure resources -->
+    <resources
+        name="surfacePressure"
+        unit="Pa"
+        mid="surfacePressure">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/surfacePressure"/>
+    </resources>
+
+    <!-- Temperature resources -->
+    <resources
+        name="temperature"
+        unit="K"
+        mid="temperature">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/tempAboveSurface5"/>
+    </resources>
+    <resources
+        name="temperatureMin"
+        unit="K"
+        mid="temperatureMin">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/tempMinLast12"/>
+    </resources>
+    <resources
+        name="temperatureMax"
+        unit="K"
+        mid="temperatureMax">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/tempMaxLast12"/>
+    </resources>
+
+    <!-- Precipitation resources -->
+    <resources
+        name="precipitationProbabilityNoRain"
+        unit="%"
+        mid="precipitationNoRain">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/precipitationLarger00Last12"/>
+    </resources>
+    <resources
+        name="precipitationProbability2mm"
+        unit="%"
+        mid="precipitation2mm">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/precipitationLarger02Last12"/>
+    </resources>
+    <resources
+        name="precipitationProbability10mm"
+        unit="%"
+        mid="precipitation10mm">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/precipitationLarger10Last12"/>
+    </resources>
+
+    <!-- Weather warning -->
+    <resources
+        name="significantWeather"
+        mid="significantWeather">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/significantWeather3Hours"/>
+    </resources>
+  </services>
+
+  <!-- 3H Forecast service - maps from reports[1] -->
+  <services
+      mid="forecast3H"
+      collectionIndex="1">
+    <timestamp
+        strategy="FEATURE">
+      <featurePath
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//WeatherReport/timestamp"/>
+    </timestamp>
+    <name name="3H Forecast"/>
+    <collectionFeature
+        xsi:type="ecore:EReference"
+        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+
+    <!-- Wind resources -->
+    <resources
+        name="windSpeed"
+        changeable="false"
+        unit="m/s"
+        mid="windSpeed">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/windSpeed"/>
+    </resources>
+    <resources
+        name="windDirection"
+        unit="degrees"
+        mid="windDirection">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/windDirection"/>
+    </resources>
+    <resources
+        name="windGustLastHour"
+        unit="m/s"
+        mid="windGustLastHour">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/windGustLastHour"/>
+    </resources>
+
+    <!-- Cloud resources -->
+    <resources
+        name="cloudCoverTotal"
+        unit="%"
+        mid="cloudCoverTotal">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/cloudCoverTotal"/>
+    </resources>
+
+    <!-- Pressure resources -->
+    <resources
+        name="surfacePressure"
+        unit="Pa"
+        mid="surfacePressure">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/surfacePressure"/>
+    </resources>
+
+    <!-- Temperature resources -->
+    <resources
+        name="temperature"
+        unit="K"
+        mid="temperature">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/tempAboveSurface5"/>
+    </resources>
+    <resources
+        name="temperatureMin"
+        unit="K"
+        mid="temperatureMin">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/tempMinLast12"/>
+    </resources>
+    <resources
+        name="temperatureMax"
+        unit="K"
+        mid="temperatureMax">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/tempMaxLast12"/>
+    </resources>
+
+    <!-- Precipitation resources -->
+    <resources
+        name="precipitationProbabilityNoRain"
+        unit="%"
+        mid="precipitationNoRain">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/precipitationLarger00Last12"/>
+    </resources>
+    <resources
+        name="precipitationProbability2mm"
+        unit="%"
+        mid="precipitation2mm">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/precipitationLarger02Last12"/>
+    </resources>
+    <resources
+        name="precipitationProbability10mm"
+        unit="%"
+        mid="precipitation10mm">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/precipitationLarger10Last12"/>
+    </resources>
+
+    <!-- Weather warning -->
+    <resources
+        name="significantWeather"
+        mid="significantWeather">
+      <eType
+          xsi:type="ecore:EDataType"
+          href="http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+      <valueFeature
+          xsi:type="ecore:EAttribute"
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport/significantWeather3Hours"/>
+    </resources>
+  </services>
+</sensinactMapping:ProviderMapping>

@@ -1,0 +1,76 @@
+# core 
+org.eclipse.sensinact.gateway.core:impl:${sensinact.version}
+org.eclipse.sensinact.gateway.core:annotation:${sensinact.version}
+org.eclipse.sensinact.gateway.core:api:${sensinact.version}
+org.eclipse.sensinact.gateway.core:emf-api:${sensinact.version}
+org.eclipse.sensinact.gateway.core.models:provider:${sensinact.version}
+org.eclipse.sensinact.gateway.core:geo-json:${sensinact.version}
+
+
+# northbound
+org.eclipse.sensinact.gateway.northbound:rest:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound:gogo-shell:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound:query-handler-api:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound:query-handler-impl:${sensinact.version}
+##session
+org.eclipse.sensinact.gateway.northbound.session:session-api:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.session:session-impl:${sensinact.version}
+
+## security
+org.eclipse.sensinact.gateway.northbound.security:security-api:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.security:openid-connect:${sensinact.version}
+
+## sensorethings
+org.eclipse.sensinact.gateway.northbound.sensorthings:dto:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.sensorthings:rest.api:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.sensorthings:rest.gateway:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.sensorthings:filter:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.sensorthings:mqtt:${sensinact.version}
+
+## filters
+org.eclipse.sensinact.gateway.filters:filters.core:${sensinact.version}
+org.eclipse.sensinact.gateway.filters:resource.selector:${sensinact.version}
+org.eclipse.sensinact.gateway.filters:resource.selector.impl:${sensinact.version}
+
+## sensorthings mqtt dependencies
+io.netty:netty-common:4.1.93.Final
+io.netty:netty-buffer:4.1.93.Final
+io.netty:netty-codec:4.1.93.Final
+io.netty:netty-codec-http:4.1.93.Final
+io.netty:netty-codec-mqtt:4.1.93.Final
+io.netty:netty-common:4.1.93.Final
+io.netty:netty-handler:4.1.93.Final
+io.netty:netty-resolver:4.1.93.Final
+io.netty:netty-transport:4.1.93.Final
+io.netty:netty-transport-classes-epoll:4.1.93.Final
+io.netty:netty-transport-native-unix-common:4.1.93.Final
+
+## security
+org.eclipse.sensinact.gateway.northbound.security:authentication-api:${sensinact.version}
+org.eclipse.sensinact.gateway.northbound.security:openid-connect:${sensinact.version}
+## websockets
+org.eclipse.sensinact.gateway.northbound:websocket:${sensinact.version}
+
+
+# southbound
+## devicefactory
+org.eclipse.sensinact.gateway.southbound.device-factory:device-factory-core:${sensinact.version}
+org.eclipse.sensinact.gateway.southbound.device-factory:parser-csv:${sensinact.version}
+org.eclipse.sensinact.gateway.southbound.device-factory:parser-json:${sensinact.version}
+## http
+org.eclipse.sensinact.gateway.southbound.http:http-callback-whiteboard:${sensinact.version}
+org.eclipse.sensinact.gateway.southbound.http:http-device-factory:${sensinact.version}
+## mqtt
+org.eclipse.sensinact.gateway.southbound.mqtt:mqtt-client:${sensinact.version}
+org.eclipse.sensinact.gateway.southbound.mqtt:mqtt-device-factory:${sensinact.version}
+## virtual
+org.eclipse.sensinact.gateway.southbound.virtual:virtual-temperature-sensor:${sensinact.version}
+## history
+org.eclipse.sensinact.gateway.southbound.history:history-api:${sensinact.version}
+org.eclipse.sensinact.gateway.southbound.history:timescale-provider:${sensinact.version}
+org.postgresql:postgresql:42.7.3
+org.apache.aries.tx-control:tx-control-service-local:1.0.1
+org.apache.aries.tx-control:tx-control-provider-jdbc-local:1.0.1
+
+io.dropwizard.metrics:metrics-core:4.2.37
+org.eclipse.sensinact.gateway.filters:esri.geometry:${sensinact.version}

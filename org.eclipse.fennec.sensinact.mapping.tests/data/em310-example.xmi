@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="ASCII"?>
+<em310udl:EM310UDLUplink xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:em310udl="http://www.example.org/lorawan/specific/em310udl" deduplicationId="a98ecdf0-c93c-4d7f-9b55-e99d0eba5b9b" time="2025-07-07T15:42:11.141117+00:00" adr="true" dr="2" fCnt="55" fPort="85" data="AXVFA4JSAgQAAA==" devAddr="0103fd23">
+  <deviceInfo tenantId="52f14cd4-c6f1-4fbd-8f87-4025e1d49242" tenantName="Jena" applicationId="e8d62144-b9b6-4fee-937f-5d8248eee499" applicationName="TrashLevel_KSJ" deviceProfileId="1e6d47f7-1432-4c83-b48d-dd34a7e5e9c6" deviceProfileName="EM310-UDL" deviceName="EM310-UDL_6713C40192590001" devEui="24e124713c401925">
+    <tags dev_type="em310-udl"/>
+  </deviceInfo>
+  <rxInfo gatewayId="503139535d604750" uplinkId="44289" time="2025-07-07T15:42:11.141117+00:00" rssi="-103" snr="1.0" channel="4" context="JkxkFA==">
+    <location latitude="50.88423992258394" longitude="11.596755981445314"/>
+    <metadata region_name="eu868" region_common_name="EU868"/>
+  </rxInfo>
+  <txInfo frequency="867300000">
+    <modulation>
+      <lora bandwidth="125000" spreadingFactor="10" codeRate="CR_4_5"/>
+    </modulation>
+  </txInfo>
+  <object distance="594.0" position="normal" battery="69.0"/>
+</em310udl:EM310UDLUplink>

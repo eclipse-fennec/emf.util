@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sens:ProviderSetup xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" xmlns:sens="https://eclipse.org/sensinact/1.0" name="SensorA Provider" id="provSensorA">
+  <nameFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//SensorA/idA"/>
+  <classReferences href="https://geckoprojects.org/semex/1.0#//SensorA"/>
+  <provider href="SensinactProvider01.xmi#moisture"/>
+  <serviceSetups name="moistureSensorA" id="moistureSensorA">
+    <nameFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//SensorA/nameA"/>
+    <classReferences href="https://geckoprojects.org/semex/1.0#//SensorA"/>
+    <resourceSetups id="moistureValueSensorA">
+      <nameFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//SensorA/nameA"/>
+      <resource href="SensinactProvider01.xmi#moistValue"/>
+      <metadataSetup>
+        <unitFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//SensorA/unit"/>
+        <longitudeFeatures xsi:type="ecore:EReference" href="https://geckoprojects.org/semex/1.0#//SensorA/geo"/>
+        <longitudeFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//Location/longitude"/>
+        <latitudeFeatures xsi:type="ecore:EReference" href="https://geckoprojects.org/semex/1.0#//SensorA/geo"/>
+        <latitudeFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//Location/latitude"/>
+      </metadataSetup>
+      <valueFeatures xsi:type="ecore:EAttribute" href="https://geckoprojects.org/semex/1.0#//SensorA/valueA"/>
+    </resourceSetups>
+    <service href="SensinactProvider01.xmi#moisturePercent"/>
+  </serviceSetups>
+</sens:ProviderSetup>

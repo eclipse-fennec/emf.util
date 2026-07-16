@@ -1,0 +1,49 @@
+UplinkMessage::EClass
+
+TypeMaps:
+	name=lorawan.tx.typeMapping
+	feature=txInfo::EStrucutralFeature
+	0->key=DraginoTx;value=FraginoTxInfo::EClass
+	1->key=EM310Tx;value=EM310TxInfo::EClass
+TypeMap {
+	String name;
+	EClass eclass
+	EStructuralFeature feature;
+	string featurePath;
+	Map<String, String> typeMap;
+	
+	TypeMap(String name, Eclass eclass) {
+		this.eclass = eclass
+		this.feature = null;
+	}
+	TypeMap(String name, EStructuralFeature feature) {
+		this.feature = feture;
+		eclass = feature.getEclass();
+	}
+	
+	setFeaturePath(String featurePath) {
+	}
+}
+
+TypeMapRegsitry {
+	Map<String, TypeMap> registry ...
+	
+	TypeMap createOrGetTypeMap(String name, EstrucutralFeature feature) {
+		regsitry.put(name, new TypeMap(name, feature)
+	}
+	
+	removeTypeMap(String name) {
+	}
+	
+	addEntry(String name, String key, String value) {
+		TypeMap map = registry.get(name);
+		map.typeMap.put(key, value)
+	}
+	
+	removeEntry(String name, String key)
+\
+	
+	name=lorawan.typeMapping
+	feature=object::EStrucutralFeature
+	0->key=Dragino; value=DraginoDecodeObject
+	
