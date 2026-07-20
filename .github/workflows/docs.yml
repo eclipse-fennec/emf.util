@@ -1,83 +1,17 @@
 name: Documentation
 
 on:
-  # Manual rebuild only. The automatic docs build + Pages deploy runs as gated jobs
-  # in snapshot.yml / release.yml (after a successful license check + build), so the
-  # documentation is never published unless the build succeeded.
   workflow_dispatch:
 
-# Read-only by default; the deploy job escalates to the Pages scopes it needs.
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
-# Never cancel an in-flight Pages deployment.
 concurrency:
   group: pages
   cancel-in-progress: false
 
-env:
-  LC_ALL: en_US.UTF-8
-
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  build:
-    name: Build VitePress site
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-      - name: Git Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          # Full history so VitePress `lastUpdated` git timestamps are accurate.
-          fetch-depth: 0
-      - name: Set up Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: docs-site/package-lock.json
-      - name: Install dependencies
-        working-directory: docs-site
-        run: npm ci
-      - name: Build docs
-        working-directory: docs-site
-        env:
-          # Publishes to /emf.util/<branch>/ (see docs-site config.mts).
-          DOCS_BRANCH: ${{ github.ref_name }}
-        run: npm run docs:build
-      - name: Assemble site slice
-        run: |
-          mkdir -p site/${{ github.ref_name }}
-          cp -r docs-site/docs/.vitepress/dist/. site/${{ github.ref_name }}/
-          # Root redirect so the bare Pages URL lands on the built branch.
-          printf '<!doctype html><meta http-equiv="refresh" content="0; url=./%s/">\n' "${{ github.ref_name }}" > site/index.html
-          touch site/.nojekyll
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: site
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+  docs:
+    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@227b1dfa5f323fdd6d857d0a61fbaaf6e7288716 # v1.0.0

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: dependency-review-${{ github.ref }}
@@ -14,20 +15,4 @@ concurrency:
 
 jobs:
   dependency-review:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # Allow the action to post the review summary as a PR comment.
-      pull-requests: write
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-      - name: Git Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Dependency Review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with:
-          comment-summary-in-pr: on-failure
-          fail-on-severity: high
+    uses: eclipse-fennec/.github/.github/workflows/reusable-dependency-review.yml@227b1dfa5f323fdd6d857d0a61fbaaf6e7288716 # v1.0.0
