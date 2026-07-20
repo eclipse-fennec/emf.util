@@ -2,11 +2,11 @@ name: CI Build
 
 on:
   push:
-    # Run on all pushes EXCEPT the main and snapshot branches (those have dedicated workflows).
+    # Build-only on every branch EXCEPT main and snapshot (those release/publish via
+    # their dedicated workflows). All other branches only verify.
     branches-ignore:
       - main
       - snapshot
-      - initial
   pull_request:
     branches:
       - '*'
@@ -19,51 +19,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  LC_ALL: en_US.UTF-8
-  GRADLE_OPTS: >-
-    -Dorg.gradle.parallel=true
-
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  build:
-    name: Gradle Build (Java ${{ matrix.java-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        java-version: [21, 25]
-      fail-fast: false
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-      - name: Git Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Gradle Wrapper Validation
-        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
-      - name: Set up Java
-        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
-        with:
-          distribution: "temurin"
-          cache: "gradle"
-          java-version: ${{ matrix.java-version }}
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
-      - name: Gradle version
-        run: ./gradlew --no-daemon --version
-      - name: Build with Gradle
-        run: ./gradlew clean build testOSGi --info
-      - name: Run Performance Tests
-        run: ./gradlew perfTest --info
-      - name: Publish Test Results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: test-results-java-${{ matrix.java-version }}
-          path: |
-            **/build/test-results/**/TEST-*.xml
-            **/generated/test-reports/**/TEST-*.xml
+  verify:
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@227b1dfa5f323fdd6d857d0a61fbaaf6e7288716 # v1.0.0
