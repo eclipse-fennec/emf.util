@@ -14,6 +14,7 @@ package org.eclipse.fennec.openapi.osgi.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -101,13 +102,20 @@ public class OpenApiServiceClientIntegrationTest {
 		Configuration configuration = configurationAdmin.createFactoryConfiguration("OpenApiServiceClient", "?");
 		try {
 			Dictionary<String, Object> properties = new Hashtable<>();
+			properties.put("name", "ping-client");
 			properties.put("documentUrl", "http://localhost:" + port + "/openapi.json");
 			properties.put("baseUri", "http://localhost:" + port);
 			properties.put("format", "json");
 			configuration.update(properties);
 
-			ServiceClient client = awaitService(context, 10_000);
-			assertNotNull(client, "the configuration should publish a ServiceClient service");
+			ServiceReference<ServiceClient> reference = awaitService(context, 10_000);
+			assertNotNull(reference, "the configuration should publish a ServiceClient service");
+			assertEquals("ping-client", reference.getProperty(ServiceClient.PROP_NAME),
+					"the configured name should be published as the '" + ServiceClient.PROP_NAME
+							+ "' service property");
+
+			ServiceClient client = context.getService(reference);
+			assertNotNull(client, "the ServiceClient service should be obtainable");
 
 			ServiceOperation ping = client.operation("ping");
 			assertNotNull(ping, "the imported document should expose the 'ping' operation");
@@ -116,6 +124,10 @@ public class OpenApiServiceClientIntegrationTest {
 			assertNotNull(response, "ping should return a Pong");
 			Object message = response.eGet(response.eClass().getEStructuralFeature("message"));
 			assertEquals("pong", message);
+
+			String nsURI = response.eClass().getEPackage().getNsURI();
+			assertTrue(nsURI.endsWith("/ping-client"),
+					"the configured name should be the namespace-isolation token, but nsURI was " + nsURI);
 		} finally {
 			configuration.delete();
 			server.stop(0);
@@ -131,16 +143,14 @@ public class OpenApiServiceClientIntegrationTest {
 		}
 	}
 
-	@SuppressWarnings("resource") // the returned ServiceClient is DS-managed; the caller must not close it
-	private static ServiceClient awaitService(BundleContext context, long timeoutMillis) throws InterruptedException {
+	@SuppressWarnings("resource") // the ServiceClient behind the reference is DS-managed; never closed here
+	private static ServiceReference<ServiceClient> awaitService(BundleContext context, long timeoutMillis)
+			throws InterruptedException {
 		long deadline = System.currentTimeMillis() + timeoutMillis;
 		while (System.currentTimeMillis() < deadline) {
 			ServiceReference<ServiceClient> reference = context.getServiceReference(ServiceClient.class);
-			if (reference != null) {
-				ServiceClient service = context.getService(reference);
-				if (service != null) {
-					return service;
-				}
+			if (reference != null && context.getService(reference) != null) {
+				return reference;
 			}
 			Thread.sleep(100);
 		}

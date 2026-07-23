@@ -68,6 +68,14 @@ public class OpenApiServiceClientComponent implements ServiceClient {
 			description = "A ServiceClient that invokes the operations of one OpenAPI 3 document over HTTP.")
 	public @interface Config {
 
+		@AttributeDefinition(name = "Name", required = false,
+				description = "Stable, human-chosen name for this client. Published as the 'name'"
+						+ " service property (ServiceClient.PROP_NAME) for consumers to select or label"
+						+ " the client, and used instead of the service.pid as the namespace-isolation"
+						+ " token, keeping the generated nsURIs stable across restarts. Must be unique"
+						+ " among clients sharing a MetadataWhiteboard.")
+		String name() default "";
+
 		@AttributeDefinition(name = "Document URL",
 				description = "URL the OpenAPI 3 document is fetched from (http, https or file).")
 		String documentUrl();
@@ -100,8 +108,7 @@ public class OpenApiServiceClientComponent implements ServiceClient {
 				? OpenApiImporter.fromYaml(document)
 				: OpenApiImporter.fromJson(document);
 
-		Object pid = properties.get("service.pid");
-		isolate(model, pid != null ? pid.toString() : config.documentUrl());
+		isolate(model, isolationToken(config, properties));
 
 		OpenApiServiceClient client = new OpenApiServiceClient(URI.create(config.baseUri()), model, metadata);
 		applyAuth(client, config.auth());
@@ -159,6 +166,19 @@ public class OpenApiServiceClientComponent implements ServiceClient {
 	private void isolate(OpenApiModel model, String token) {
 		reNamespace(model.schemasPackage(), token);
 		reNamespace(model.requestsPackage(), token);
+	}
+
+	/**
+	 * The configured {@link Config#name() name} if present — stable across restarts (a pid from a
+	 * programmatically created factory configuration is not) — else the {@code service.pid}, else
+	 * the document URL.
+	 */
+	private static String isolationToken(Config config, Map<String, Object> properties) {
+		if (config.name() != null && !config.name().isBlank()) {
+			return config.name();
+		}
+		Object pid = properties.get("service.pid");
+		return pid != null ? pid.toString() : config.documentUrl();
 	}
 
 	private void reNamespace(EPackage ePackage, String token) {

@@ -109,6 +109,7 @@ registers one ready-to-invoke `ServiceClient`:
 
 | Property | Meaning |
 | --- | --- |
+| `name` | optional stable, human-chosen name — published as the `name` service property (`ServiceClient.PROP_NAME`) so consumers can select/label the client (e.g. an MCP tool bridge deriving tool names); must be unique among clients sharing a `MetadataWhiteboard` |
 | `documentUrl` | URL the OpenAPI 3 document is fetched from (`http`/`https`/`file`) |
 | `baseUri` | base URI of the target service, e.g. `https://api.example.com/v1` |
 | `format` | `json` (default) or `yaml` |
@@ -118,6 +119,8 @@ The component binds the framework's shared `MetadataWhiteboard`. Because the imp
 generated `schemas`/`requests` packages with **constant** nsURIs and the whiteboard keys metadata by
 nsURI, each configuration first rewrites those nsURIs to be unique to itself — so several OpenAPI
 clients can share one whiteboard without colliding; the packages are unregistered on deactivation.
+The isolation token is the configured `name` when set (keeping the rewritten nsURIs stable across
+restarts), else the `service.pid`.
 Consumers `@Reference` the `ServiceClient` and must **not** `close()` it (its lifecycle follows the
 configuration). The bundle inlines the `openapi.client`/`openapi.ecore` runtime packages (like the
 SOAP `.osgi` bundle) but still needs the codec bundles at runtime.

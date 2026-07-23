@@ -223,6 +223,26 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
   document; first satisfiable requirement alternative wins, empty alternative = anonymous OK,
   required-but-unregistered fails fast before HTTP. `authorization_code`/OIDC discovery
   deliberately out of scope (headless).
+- **`org.eclipse.fennec.openapi.osgi`** — the first **client** OSGi bundle (Protobuf/SOAP `.osgi`
+  register a `Resource.Factory`; OpenAPI has no resource of its own). A **config-driven**
+  `@Component(configurationPolicy=REQUIRE) @Designate(factory=true)` implementing `ServiceClient`:
+  each ConfigAdmin factory config for PID `OpenApiServiceClient` (`name`/`documentUrl`/`baseUri`/
+  `format`/`auth[]`, auth entries `<scheme>=apiKey|bearer|basic|clientCredentials:<params>`) imports
+  one document and publishes one `ServiceClient` service. The optional `name` is the stable,
+  human-chosen client name (convention constant `ServiceClient.PROP_NAME`, DS auto-propagates it as
+  service property; consumers like the emf.osgi-mcp tool bridge, see emf.osgi-mcp#15 / emf.util#11,
+  select/label clients by it). It binds the framework's shared
+  `MetadataWhiteboard` — added `OpenApiServiceClient(baseUri, model, MetadataWhiteboard)` for this
+  (2-arg ctor delegates to it with a private `MetadataServiceFactory.create()`). **Isolation:** the
+  importer stamps generated `schemas`/`requests` packages with *constant* nsURIs and
+  `registerPackage` keys by nsURI, so the component rewrites them per config before registering
+  (token = `name` if set — restart-stable — else `service.pid`; else two clients sharing the
+  whiteboard collide); unregistered on deactivate. Inlines
+  `openapi.client`/`openapi.ecore` (like SOAP). `.osgi.tests` proves it end-to-end in Felix
+  (ConfigAdmin factory config → import → codec (de)serialize → HTTP round-trip; **first repo OSGi
+  test that runs the whole codec stack** — resolves via `resolve.test`, needs
+  `-runsystempackages: com.sun.net.httpserver`; the codec's `MetadataServiceComponent` +
+  `CodecAspectProviderComponent` supply the whiteboard). Sets the pattern for `soap.client`/`grpc`.
 - **Dependency gotcha:** BSN `org.eclipse.fennec.model.metadata` exists from TWO sources
   (fennecCodec 0.1.0 with `api.MetadataService`, fennecEMFMetadata 1.0.0 without) — pin
   `version="[0.1,0.2)"` on build/test paths or `version=latest` picks the wrong one.

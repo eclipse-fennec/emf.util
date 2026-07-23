@@ -27,6 +27,15 @@ import org.eclipse.emf.ecore.EObject;
  */
 public interface ServiceClient extends AutoCloseable {
 
+	/**
+	 * Recommended OSGi service property under which configuration-driven client components advertise
+	 * a stable, human-chosen name for the published client. Consumers use it to select a client by
+	 * LDAP filter or to derive stable identifiers from it (e.g. an MCP tool bridge deriving
+	 * {@code <clientName>_<operationName>} tool names). Purely a convention — plain-Java use of this
+	 * API does not involve it.
+	 */
+	String PROP_NAME = "name";
+
 	/** The operations this client can invoke. */
 	List<? extends ServiceOperation> operations();
 
