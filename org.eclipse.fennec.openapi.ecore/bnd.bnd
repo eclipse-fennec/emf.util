@@ -18,7 +18,8 @@ Bundle-Description: Derives service operations from an OpenAPI document (bootstr
 	org.eclipse.fennec.codec.api;version=latest,\
 	org.eclipse.fennec.codec.jsonschema;version=latest,\
 	org.eclipse.fennec.codec.metadata;version=latest,\
-	org.eclipse.fennec.model.metadata;version="[0.1,0.2)",\
+	org.eclipse.fennec.model.metadata;version=latest,\
+	org.eclipse.fennec.model.metadata.api,\
 	tools.jackson.core.jackson-core;version=latest,\
 	tools.jackson.core.jackson-databind;version=latest,\
 	com.fasterxml.jackson.core.jackson-annotations;version=latest

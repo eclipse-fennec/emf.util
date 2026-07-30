@@ -37,6 +37,7 @@ import org.eclipse.fennec.sensinact.model.mapping.AdminMapping;
 import org.eclipse.fennec.sensinact.model.mapping.Mapping;
 import org.eclipse.fennec.sensinact.model.mapping.MappingFactory;
 import org.eclipse.fennec.sensinact.model.mapping.MappingProfile;
+import org.eclipse.fennec.sensinact.model.mapping.NameMapping;
 import org.eclipse.fennec.sensinact.model.mapping.ProviderMapping;
 import org.eclipse.fennec.sensinact.model.mapping.ProviderStrategy;
 import org.eclipse.fennec.sensinact.model.mapping.ReferenceMapping;
@@ -118,7 +119,7 @@ public class ProviderModelSensinactMapper {
 			MappingProfileRegistry.ValidationResult validationResult = profileRegistry.validateMapping(providerMapping);
 			if (!validationResult.isValid()) {
 				StringBuilder errorMessage = new StringBuilder("Mapping validation failed for provider '")
-						.append(providerMapping.getName() != null ? providerMapping.getName().getName() : providerMapping.getMid())
+						.append(displayName(providerMapping))
 						.append("':\n");
 
 				for (String error : validationResult.getErrors()) {
@@ -137,7 +138,7 @@ public class ProviderModelSensinactMapper {
 
 			// Log warnings if any
 			if (!validationResult.getWarnings().isEmpty()) {
-				String providerName = providerMapping.getName() != null ? providerMapping.getName().getName() : providerMapping.getMid();
+				String providerName = displayName(providerMapping);
 				logger.warn("Mapping validation warnings for provider '{}':", providerName);
 				for (String warning : validationResult.getWarnings()) {
 					logger.warn("  - {}", warning);
@@ -153,8 +154,20 @@ public class ProviderModelSensinactMapper {
 				" (using profile: " + profile.getProfileId() + " v" + profile.getVersion() + 
 				", strategy: " + profile.getProviderStrategy() + ")" : "";
 
-		String providerName = providerMapping.getName() != null ? providerMapping.getName().getName() : providerMapping.getMid();
+		String providerName = displayName(providerMapping);
 		logger.info("Model for provider '{}' → '{}' successfully registered{}.", providerName, actualProviderId, profileInfo);
+	}
+
+	/**
+	 * Returns a human-readable provider name for log and error messages: the static mapping
+	 * name if set, otherwise the mid. A NameMapping may carry only a feature path, in which
+	 * case the name is resolvable per instance only, not at registration time.
+	 * @param providerMapping the {@link ProviderMapping}
+	 * @return the display name; never {@code null} for valid mappings
+	 */
+	private static String displayName(ProviderMapping providerMapping) {
+		NameMapping name = providerMapping.getName();
+		return name != null && name.getName() != null ? name.getName() : providerMapping.getMid();
 	}
 
 	/**
@@ -369,8 +382,12 @@ public class ProviderModelSensinactMapper {
 		List<EAttribute> attributesToMap = new ArrayList<>();
 
 		if (filterList == null || filterList.isEmpty()) {
-			// No filter: we just include all
-			attributesToMap.addAll(allAttributes);			
+			// No filter: exclude=true (default) includes all attributes; exclude=false includes
+			// none - a selector-only ReferenceMapping that just picks the service source element.
+			// Mirrors ValueMapperImpl.getFilteredAttributes.
+			if (exclude) {
+				attributesToMap.addAll(allAttributes);
+			}
 		} else {
 			if (exclude) {
 				// exclude=true: include all attributes EXCEPT those in filter

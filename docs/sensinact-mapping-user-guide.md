@@ -303,12 +303,50 @@ When a feature path crosses a multi-valued reference, pick the element with
 </name>
 ```
 
-A common pattern is two services reading different indices of the same collection
-(`collectionIndex="0"` for current, `"1"` for the next forecast period).
-
 > **`collectionFilter` is reserved but not yet implemented.** The attribute exists on the
 > metamodel for a future "select the element where …" expression; today the engine logs a
 > warning and falls back to `collectionIndex`.
+
+### Mapping services onto collection elements
+
+A service's `referencedResource` (a `ReferenceMapping`) does double duty: besides
+[automatic resource generation](#automatic-resource-generation) it selects the **source
+element for the whole service**. Its `featurePath` + `collectionIndex` decide which element
+the service's timestamp, explicit `resources`, and (for the admin service) the `*Ref`
+features read from. The classic pattern is two services on different indices of the same
+collection — current weather from `reports[0]`, the 3-hour forecast from `reports[1]`:
+
+```xml
+<services mid="currentWeather">
+  <name name="Current Weather"/>
+  <timestamp strategy="FEATURE">  <!-- resolved against reports[0] -->
+    <featurePath xsi:type="ecore:EAttribute" href="w.ecore#//WeatherReport/timestamp"/>
+  </timestamp>
+
+  <!-- selector only: exclude="false" with no filter generates no resources -->
+  <referencedResource collectionIndex="0" exclude="false">
+    <featurePath xsi:type="ecore:EReference" href="w.ecore#//WeatherReports/reports"/>
+  </referencedResource>
+
+  <!-- explicit resources: valueFeature paths are relative to reports[0] -->
+  <resources name="windSpeed" unit="m/s" mid="windSpeed">
+    <eType xsi:type="ecore:EDataType" href="http://www.eclipse.org/emf/2002/Ecore#//EFloat"/>
+    <valueFeature xsi:type="ecore:EAttribute" href="w.ecore#//MOSMIXSWeatherReport/windSpeed"/>
+  </resources>
+</services>
+
+<services mid="forecast3H">
+  <!-- same shape, collectionIndex="1" -->
+</services>
+```
+
+Without a `referencedResource` the service reads from the root source object. With one, all
+feature paths inside the service are relative to the selected element — so resource paths
+start at the element type (`MOSMIXSWeatherReport/windSpeed`), not at the container. If the
+selected index does not exist in an incoming instance, the whole instance fails validation,
+so a two-index mapping requires at least two elements in the collection. The complete
+worked example is `model/WeatherReportsProviderMapping.xmi` (its admin service selects
+`reports[0]` the same way).
 
 ## Automatic resource generation
 
@@ -364,6 +402,9 @@ Notes:
   [Metadata](#metadata-where-values-come-from)), so unit/description/extra come for free.
 - Auto-generated resources are kept in the service's transient `temporaryResources`; they
   are regenerated on each registration and processed identically to explicit `resources`.
+- The same `referencedResource` also selects the service's source element (see
+  [Mapping services onto collection elements](#mapping-services-onto-collection-elements));
+  with `exclude="false"` and no filter it acts as a pure selector and generates nothing.
 
 ## Admin service
 
@@ -535,8 +576,17 @@ is service-driven:
   `GatewayThread`.
 - Register `MappingProfile` services; `MappingProfileRegistryImpl` collects them by
   `profileId` and validates conformance.
+- Feed data in through the **`InstancePusher`** service: `pushInstance(EObject)` looks up
+  all registered mappings for the instance's EClass and applies each on the gateway thread,
+  returning the number of mappings applied (`0` = nothing registered for that EClass;
+  individual mapping failures are logged and skipped). This is the intended ingress for
+  southbound connectors — receive a payload, deserialize it to an EObject, push.
 - The payload EPackages (your domain models) must be registered in the runtime so both the
-  mapping XMI and the incoming instances resolve.
+  mapping XMI and the incoming instances resolve. **The registry lookup keys on EClass
+  identity**: incoming instances must be built against the same EPackage instance the
+  mappings resolved their `providerClasses` from. For atlas-sourced sensor models that means
+  the atlas-fetched package — when in doubt, take it from the mapping itself
+  (`mapping.getProviderClasses().get(0).getEPackage()`).
 
 Programmatic use (tests, embedding) goes through the factory, always on the gateway thread:
 
@@ -549,6 +599,93 @@ if (!v.isValid()) throw new ValueMappingException(v.getErrors().toString());
 mapper.mapInstance(sourceInstance);                 // update the twin
 Map<String,Object> values = mapper.mapResourceValues(sourceInstance);  // inspect without updating
 ```
+
+## Loading mappings from a Model Atlas
+
+Instead of shipping mapping XMIs inside a bundle, they (and the sensor-model EPackages they
+reference) can be pulled from a remote [Model Atlas](https://github.com/eclipse-fennec/model.atlas).
+Two pieces cooperate:
+
+- the **atlas rest client** (`org.eclipse.fennec.model.atlas.rest.client.osgi`): one factory
+  config per atlas instance; it publishes a `ReadableScopeService<EObject>` per scope (service
+  property `atlas.scope`) and remote EPackages on demand (fetch-on-miss, so `href`s from a
+  mapping XMI into a sensor model resolve without the sensor-model bundle being deployed);
+- the **mapping source** (`org.eclipse.fennec.sensinact.mapping.atlas`, this repo): one factory
+  config per scope; it reads `ProviderMapping`/`MappingProfile` objects from the configured
+  atlas registries and registers each as an OSGi service — from there the whiteboards above
+  take over as if the mapping had been registered locally.
+
+```json
+{
+  "org.eclipse.fennec.model.atlas.rest.client~iot": {
+    "base.uri": "http://atlas-host:8080/atlas/rest",
+    "scope.allow.list": ["iot"]
+  },
+  "org.eclipse.fennec.sensinact.mapping.atlas~iot": {
+    "atlasScope.target": "(atlas.scope=iot)"
+  }
+}
+```
+
+Mapping-source configuration (factory PID `org.eclipse.fennec.sensinact.mapping.atlas`):
+
+| Property | Default | Meaning |
+|---|---|---|
+| `atlasScope.target` | — | DS target filter selecting the scope service, e.g. `(atlas.scope=iot)` (add `(atlas.stage=…)` to pin a stage-published client) |
+| `registries` | `["mappings"]` | atlas registry name(s) to read objects from |
+| `object.ids` | `[]` | explicit allowlist; empty loads everything the registries list |
+| `stage` | `""` | explicit atlas stage to read; empty reads the final stage |
+| `refresh.interval.ms` | `0` | periodic re-fetch; changed objects are re-registered (whiteboards see remove+add), removed ids unregistered. `0` = load once on activation |
+| `retry.interval.ms` | `30000` | back-off while the initial load is incomplete (atlas unreachable, object missing) |
+
+Registered services carry `sensinact.mapping.mid` (or `sensinact.mapping.profile.id`),
+`atlas.remote=true`, `atlas.scope`, `atlas.registry`, `atlas.object.id` and, when configured,
+`atlas.stage` — so atlas-sourced mappings can be told apart from locally deployed ones.
+
+Notes:
+
+- **The mapping metamodel stays local.** The atlas client resolves nsURIs local-first against
+  the global `EPackage.Registry`; the source pins the generated mapping package there before
+  the first fetch, so fetched objects are real `ProviderMapping` instances (not dynamic
+  EObjects). Sensor models, by contrast, may live only in the atlas.
+- All atlas I/O happens on a private thread — activation never blocks, per-object failures are
+  logged and skipped, and a transient outage during refresh keeps the current registrations.
+- If the atlas client config goes away, the source deactivates and all its mapping services
+  vanish; when it returns, everything reloads.
+- **Sensor-model drift:** the atlas client's periodic drift check (`drift.check.interval.ms`
+  on the rest-client config) also watches EPackages that were resolved fetch-on-miss, so a
+  sensor model changed or removed on the atlas is detected in a running gateway. Requires
+  model.atlas client *and* server from 2026-07-30 or later (model.atlas#160/#161 — older
+  clients never drift-checked fetch-on-miss packages, and an older server corrupts the
+  served `EPackage` on the first schema fetch).
+- **Uploading mapping XMIs to the atlas:** `POST` to
+  `/{scope}/registries/{registry}/stages/{stage}/{objectId}` with content type
+  `application/xmi`. (Atlas servers built before 2026-07-30 crashed on a relative
+  `xsi:schemaLocation` — `ArrayIndexOutOfBoundsException` in the codec.rest
+  `XMLURIHandler`, fixed in fennec-codec — against an older server, strip the
+  schemaLocation first and don't upload as `application/xml`.)
+- **Deserializing incoming payloads against atlas-resolved models:** create a **fresh
+  `ResourceSet` per payload** via the runtime's `ResourceSetFactory` service. The atlas
+  client contributes a `ResourceSetConfigurator`, so only resource sets created while the
+  client is active resolve unknown nsURIs remotely (local-first, then fetch-on-miss); a
+  resource set obtained before the client existed never becomes atlas-aware. A payload
+  whose model is in neither place fails with `PackageNotFoundException` — log and drop.
+  EClass identity between such payloads and atlas-loaded mappings is guaranteed by the
+  client's ETag/304 revalidation (a `304` returns the cached `EPackage` instance).
+- End-to-end example (mock atlas over HTTP, sensor EPackage *not* deployed):
+  `org.eclipse.fennec.sensinact.mapping.atlas.tests` — including the full raw-data path:
+  XMI payload → fresh `ResourceSet` (model resolved through the atlas) → `InstancePusher`
+  → twin values, plus the unknown-model case.
+- Live smoke test: `org.eclipse.fennec.sensinact.mapping.atlas.test.component`
+  (`WeatherReportsSimulator`, config PID `sensinact.mapping.atlas.test.simulator`)
+  periodically renders a `WeatherReports` **XMI payload** (as an external device would
+  send it), loads it as above and pushes the roots through the `InstancePusher` — the log
+  narrates the whole scenario: "model unknown, dropping" while the atlas is empty, "no
+  mapping registered" once only the model is uploaded, pushed values once mapping + model
+  are released (within the source's refresh interval). Launch via
+  `org.eclipse.fennec.sensinact.mapping.atlas.runtime/launch.bndrun` and watch the twin
+  with the sensinact gogo commands (`sna:` scope; the runtime includes northbound
+  `gogo-shell` + `session-impl` with `sensinact.session.manager` → `auth.policy=ALLOW_ALL`).
 
 ## Gotchas
 

@@ -1,0 +1,30 @@
+Bundle-Name: SensiNact Mapping Atlas Tests
+Bundle-Description: OSGi integration test for the Model Atlas mapping source: a mock \
+ Model Atlas served over a local HttpServer delivers a ProviderMapping XMI and the \
+ sensor-model EPackage, which end up in the sensinact mapping registry.
+
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+
+-workingset: SensiNact
+
+-library: \
+	enableOSGi-Test,\
+	enableEMF
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.eclipse.sensinact.gateway.core.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.sensinact.mapping;version=snapshot
+
+# Fixtures come straight from the sibling sensinact.mapping.tests bundle - the same
+# mapping XMI and sensor .ecore, here served by the mock atlas instead of the classpath.
+# The WeatherReports mapping (collection selectors) is the master copy from the core bundle.
+-includeresource: \
+	data/WeatherProviderMapping.xmi=${workspace}/org.eclipse.fennec.sensinact.mapping.tests/data/WeatherProviderMapping.xmi,\
+	data/WeatherReportsProviderMapping.xmi=${workspace}/org.eclipse.fennec.sensinact.mapping/model/WeatherReportsProviderMapping.xmi,\
+	data/dwd-weather.ecore=${workspace}/org.eclipse.fennec.sensinact.mapping.tests/model/dwd-weather.ecore
+
+Bundle-Version: 1.0.0.SNAPSHOT

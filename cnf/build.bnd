@@ -4,3 +4,12 @@
 	"jpms.jarname calculated module names from file name: ";is:=ignore,\
 	"No translation found for macro: fennec-baselining";is:=ignore,\
 	"No translation found for macro: maven-central";is:=ignore
+	
+# Local repository for artifacts not (yet) on Maven Central — currently the
+# Model Atlas client bundles (built from the model.atlas workspace).
+# Jars + index are committed. Remove once model.atlas publishes to Maven.
+-plugin.0.Local: \
+	aQute.bnd.deployer.repository.LocalIndexedRepo; \
+		name = Local; \
+		pretty = true; \
+		local = ${build}/local

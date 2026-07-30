@@ -12,9 +12,10 @@ Bundle-Description: A ServiceClient implementation that invokes OpenAPI operatio
 	org.eclipse.fennec.openapi.model;version=latest,\
 	org.eclipse.fennec.codec;version=latest,\
 	org.eclipse.fennec.codec.api;version=latest,\
-	org.eclipse.fennec.model.metadata;version="[0.1,0.2)",\
+	org.eclipse.fennec.model.metadata;version=latest,\
 	tools.jackson.core.jackson-core;version=latest,\
-	tools.jackson.core.jackson-databind;version=latest
+	tools.jackson.core.jackson-databind;version=latest,\
+	org.eclipse.fennec.model.metadata.api
 
 -testpath: \
 	assertj-core;version=latest,\

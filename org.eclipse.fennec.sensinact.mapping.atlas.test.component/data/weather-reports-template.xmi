@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:dwdweather="http://cdc.dwd.de/common/weather">
+  <dwdweather:WeatherReports xmi:id="wr" id="simulated-{{STATION_ID}}" reports="r0 r1"/>
+  <dwdweather:MOSMIXSWeatherReport xmi:id="r0" id="report-current" timestamp="{{TS0}}" station="st0" weatherStation="ws0" windDirection="{{DIR0}}" windSpeed="{{WIND0}}" cloudCoverTotal="{{CLOUD0}}" surfacePressure="{{PRESSURE0}}" tempAboveSurface5="{{TEMP0}}"/>
+  <dwdweather:MOSMIXSWeatherReport xmi:id="r1" id="report-forecast-3h" timestamp="{{TS1}}" station="st0" weatherStation="ws0" windDirection="{{DIR1}}" windSpeed="{{WIND1}}" cloudCoverTotal="{{CLOUD1}}" surfacePressure="{{PRESSURE1}}" tempAboveSurface5="{{TEMP1}}"/>
+  <dwdweather:WeatherStation xmi:id="ws0" name="{{STATION_NAME}}" id="{{STATION_ID}}">
+    <location latitude="50.88" longitude="12.13" elevation="311"/>
+  </dwdweather:WeatherStation>
+  <dwdweather:Station xmi:id="st0" name="{{STATION_NAME}}">
+    <location latitude="50.88" longitude="12.13" elevation="311"/>
+  </dwdweather:Station>
+</xmi:XMI>

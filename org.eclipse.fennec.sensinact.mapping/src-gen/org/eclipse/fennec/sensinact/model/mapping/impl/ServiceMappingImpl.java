@@ -60,7 +60,7 @@ public class ServiceMappingImpl extends MappingImpl implements ServiceMapping {
 	protected EList<ResourceMapping> resources;
 
 	/**
-	 * The cached value of the '{@link #getReferencedResource() <em>Referenced Resource</em>}' reference.
+	 * The cached value of the '{@link #getReferencedResource() <em>Referenced Resource</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @see #getReferencedResource()
@@ -118,14 +118,6 @@ public class ServiceMappingImpl extends MappingImpl implements ServiceMapping {
 	 */
 	@Override
 	public ReferenceMapping getReferencedResource() {
-		if (referencedResource != null && referencedResource.eIsProxy()) {
-			InternalEObject oldReferencedResource = (InternalEObject)referencedResource;
-			referencedResource = (ReferenceMapping)eResolveProxy(oldReferencedResource);
-			if (referencedResource != oldReferencedResource) {
-				if (eNotificationRequired())
-					eNotify(new ENotificationImpl(this, Notification.RESOLVE, MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE, oldReferencedResource, referencedResource));
-			}
-		}
 		return referencedResource;
 	}
 
@@ -134,8 +126,14 @@ public class ServiceMappingImpl extends MappingImpl implements ServiceMapping {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public ReferenceMapping basicGetReferencedResource() {
-		return referencedResource;
+	public NotificationChain basicSetReferencedResource(ReferenceMapping newReferencedResource, NotificationChain msgs) {
+		ReferenceMapping oldReferencedResource = referencedResource;
+		referencedResource = newReferencedResource;
+		if (eNotificationRequired()) {
+			ENotificationImpl notification = new ENotificationImpl(this, Notification.SET, MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE, oldReferencedResource, newReferencedResource);
+			if (msgs == null) msgs = notification; else msgs.add(notification);
+		}
+		return msgs;
 	}
 
 	/**
@@ -145,10 +143,17 @@ public class ServiceMappingImpl extends MappingImpl implements ServiceMapping {
 	 */
 	@Override
 	public void setReferencedResource(ReferenceMapping newReferencedResource) {
-		ReferenceMapping oldReferencedResource = referencedResource;
-		referencedResource = newReferencedResource;
-		if (eNotificationRequired())
-			eNotify(new ENotificationImpl(this, Notification.SET, MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE, oldReferencedResource, referencedResource));
+		if (newReferencedResource != referencedResource) {
+			NotificationChain msgs = null;
+			if (referencedResource != null)
+				msgs = ((InternalEObject)referencedResource).eInverseRemove(this, EOPPOSITE_FEATURE_BASE - MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE, null, msgs);
+			if (newReferencedResource != null)
+				msgs = ((InternalEObject)newReferencedResource).eInverseAdd(this, EOPPOSITE_FEATURE_BASE - MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE, null, msgs);
+			msgs = basicSetReferencedResource(newReferencedResource, msgs);
+			if (msgs != null) msgs.dispatch();
+		}
+		else if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE, newReferencedResource, newReferencedResource));
 	}
 
 	/**
@@ -174,6 +179,8 @@ public class ServiceMappingImpl extends MappingImpl implements ServiceMapping {
 		switch (featureID) {
 			case MappingPackage.SERVICE_MAPPING__RESOURCES:
 				return ((InternalEList<?>)getResources()).basicRemove(otherEnd, msgs);
+			case MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE:
+				return basicSetReferencedResource(null, msgs);
 			case MappingPackage.SERVICE_MAPPING__TEMPORARY_RESOURCES:
 				return ((InternalEList<?>)getTemporaryResources()).basicRemove(otherEnd, msgs);
 		}
@@ -191,8 +198,7 @@ public class ServiceMappingImpl extends MappingImpl implements ServiceMapping {
 			case MappingPackage.SERVICE_MAPPING__RESOURCES:
 				return getResources();
 			case MappingPackage.SERVICE_MAPPING__REFERENCED_RESOURCE:
-				if (resolve) return getReferencedResource();
-				return basicGetReferencedResource();
+				return getReferencedResource();
 			case MappingPackage.SERVICE_MAPPING__TEMPORARY_RESOURCES:
 				return getTemporaryResources();
 		}

@@ -173,7 +173,8 @@
   <eClassifiers xsi:type="ecore:EClass" name="ServiceMapping" eSuperTypes="#//Mapping">
     <eStructuralFeatures xsi:type="ecore:EReference" name="resources" upperBound="-1"
         eType="#//ResourceMapping" containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="referencedResource" eType="#//ReferenceMapping"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="referencedResource" eType="#//ReferenceMapping"
+        containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="temporaryResources" upperBound="-1"
         eType="#//ResourceMapping" transient="true" containment="true"/>
   </eClassifiers>
@@ -353,8 +354,8 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Common base for reusable persistence rules. Identified by id so a ResourceMapping can&#xA;reference it (also across files)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="id" lowerBound="1"
-        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString" iD="true">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="id" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"
+        iD="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="Unique identifier for this rule, used as the reference target from resources."/>
       </eAnnotations>
@@ -378,15 +379,13 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Store only if the absolute value change since the last stored value is at least 'delta'."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="delta" lowerBound="1"
-        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="delta" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="CountChangeRule" eSuperTypes="#//ChangeRule">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Store one value out of every 'n' notifications (n=1 stores every change)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="n" lowerBound="1"
-        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EIntegerObject"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="n" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EIntegerObject"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="TimeThrottleChangeRule" eSuperTypes="#//ChangeRule">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

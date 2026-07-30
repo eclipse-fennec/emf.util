@@ -24,7 +24,8 @@
 	fennecM2X,\
 	fennecJPA,\
 	fennecEMFModels,\
-	fennecCodec
+	fennecCodec,\
+	jakartaREST
 
 base-version: 1.0.0
 javac.source: 21
