@@ -9,4 +9,4 @@ Bundle-Description: EMF SOAP OSGi Integration Test
 -buildpath: \
 	org.osgi.framework;version=latest,\
 	org.eclipse.fennec.soap;version=snapshot,\
-	org.eclipse.fennec.emf.osgi.api
+	org.eclipse.fennec.emf.osgi.api;version=latest

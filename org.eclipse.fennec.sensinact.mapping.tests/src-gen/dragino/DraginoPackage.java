@@ -41,7 +41,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = DraginoPackage.eNS_URI, genModel = "/model/lora-test.genmodel", genModelSourceLocations = {"model/lora-test.genmodel","org.eclipse.fennec.sensinact.mapping.tests/model/lora-test.genmodel"}, ecore = "/model/dragino-message.ecore", ecoreSourceLocations = "/model/dragino-message.ecore")
+@EPackage(uri = DraginoPackage.eNS_URI, fingerprint = "fp1:70b7f8545c43be5b3a3228a46ee00c0b445a045178fd866943842e1dd8287e0c", genModel = "/model/lora-test.genmodel", genModelSourceLocations = {"model/lora-test.genmodel","org.eclipse.fennec.sensinact.mapping.tests/model/lora-test.genmodel"}, ecore = "/model/dragino-message.ecore", ecoreSourceLocations = "/model/dragino-message.ecore")
 public interface DraginoPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

@@ -41,7 +41,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = Em310udlPackage.eNS_URI, genModel = "/model/lora-test.genmodel", genModelSourceLocations = {"model/lora-test.genmodel","org.eclipse.fennec.sensinact.mapping.tests/model/lora-test.genmodel"}, ecore = "/model/em310udl-message.ecore", ecoreSourceLocations = "/model/em310udl-message.ecore")
+@EPackage(uri = Em310udlPackage.eNS_URI, fingerprint = "fp1:9dc02f22bc2a09ee08549deb2f35353ce6a94bff18c1afd1e0e75e0682303604", genModel = "/model/lora-test.genmodel", genModelSourceLocations = {"model/lora-test.genmodel","org.eclipse.fennec.sensinact.mapping.tests/model/lora-test.genmodel"}, ecore = "/model/em310udl-message.ecore", ecoreSourceLocations = "/model/em310udl-message.ecore")
 public interface Em310udlPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

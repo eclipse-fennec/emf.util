@@ -145,5 +145,7 @@ SOAP `.osgi` bundle) but still needs the codec bundles at runtime.
 
 The importer needs the Fennec codec bundles (`org.eclipse.fennec.codec.openapi`,
 `…codec.jsonschema`, `…codec`, `…openapi.model`) + Jackson; the client adds `org.eclipse.fennec.codec`
-for JSON marshalling. All are provided by the `fennecCodec` bnd library. Note the
-`org.eclipse.fennec.model.metadata` bundle exists in two versions — pin `[0.1,0.2)`.
+for JSON marshalling. All are provided by the `fennecCodec` bnd library. The metadata service
+(`org.eclipse.fennec.emf.osgi.metadata`) comes with the `fennecEMF` library; outside OSGi,
+`MetadataServiceFactory.create()` additionally needs `org.eclipse.fennec.emf.osgi.component.minimal`
+on the classpath (it supplies the default `FingerprintService`).
