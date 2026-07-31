@@ -14,6 +14,7 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 -buildpath: \
 	org.osgi.framework;version=latest,\
 	org.osgi.service.cm;version=latest,\
+	org.osgi.test.junit5.cm;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	org.eclipse.sensinact.gateway.core.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
@@ -26,5 +27,3 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	data/WeatherProviderMapping.xmi=${workspace}/org.eclipse.fennec.sensinact.mapping.tests/data/WeatherProviderMapping.xmi,\
 	data/WeatherReportsProviderMapping.xmi=${workspace}/org.eclipse.fennec.sensinact.mapping/model/WeatherReportsProviderMapping.xmi,\
 	data/dwd-weather.ecore=${workspace}/org.eclipse.fennec.sensinact.mapping.tests/model/dwd-weather.ecore
-
-Bundle-Version: 1.0.0.SNAPSHOT

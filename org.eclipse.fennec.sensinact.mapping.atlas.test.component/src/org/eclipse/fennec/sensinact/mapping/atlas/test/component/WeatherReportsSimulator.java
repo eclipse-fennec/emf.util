@@ -25,6 +25,8 @@ import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
@@ -38,8 +40,6 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Fake southbound for live-testing the full atlas → mapping → sensinact chain, starting
@@ -65,7 +65,7 @@ import org.slf4j.LoggerFactory;
 		configurationPolicy = ConfigurationPolicy.OPTIONAL)
 public class WeatherReportsSimulator {
 
-	private static final Logger logger = LoggerFactory.getLogger(WeatherReportsSimulator.class);
+	private static final Logger logger = Logger.getLogger(WeatherReportsSimulator.class.getName());
 
 	private static final String TEMPLATE = "/data/weather-reports-template.xmi";
 	/** Matches EMF's default EDate XMI serialization. */
@@ -98,8 +98,8 @@ public class WeatherReportsSimulator {
 		}
 		executor = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "weather-simulator"));
 		executor.scheduleAtFixedRate(this::pushOnce, 2, config.period_seconds(), TimeUnit.SECONDS);
-		logger.info("Weather simulator started: sending WeatherReports XMI for station '{}' every {}s",
-				config.station_id(), config.period_seconds());
+		logger.info(String.format("Weather simulator started: sending WeatherReports XMI for station '%s' every %ss",
+				config.station_id(), config.period_seconds()));
 	}
 
 	@Deactivate
@@ -121,14 +121,14 @@ public class WeatherReportsSimulator {
 				applied += instancePusher.pushInstance(root);
 			}
 			if (applied == 0) {
-				logger.warn("WeatherReports payload deserialized ({} objects) but no mapping is registered "
-						+ "for any of them - is the mapping in the atlas (and released)?", roots.size());
+				logger.warning(String.format("WeatherReports payload deserialized (%s objects) but no mapping is "
+						+ "registered for any of them - is the mapping in the atlas (and released)?", roots.size()));
 			} else {
-				logger.info("Pushed WeatherReports payload - {} mapping(s) applied", applied);
+				logger.info(String.format("Pushed WeatherReports payload - %s mapping(s) applied", applied));
 			}
 		} catch (Throwable e) {
 			// keep the scheduled task alive; log the full trace for diagnosis
-			logger.error("Failed pushing simulated WeatherReports payload", e);
+			logger.log(Level.SEVERE, "Failed pushing simulated WeatherReports payload", e);
 		}
 	}
 
@@ -151,11 +151,11 @@ public class WeatherReportsSimulator {
 		} catch (Exception e) {
 			PackageNotFoundException pnf = findPackageNotFound(e);
 			if (pnf != null) {
-				logger.warn("Cannot deserialize sensor data: model '{}' is not available "
+				logger.warning(String.format("Cannot deserialize sensor data: model '%s' is not available "
 						+ "(neither deployed nor resolvable via the Model Atlas) - dropping payload",
-						pnf.uri());
+						pnf.uri()));
 			} else {
-				logger.error("Cannot deserialize sensor data payload", e);
+				logger.log(Level.SEVERE, "Cannot deserialize sensor data payload", e);
 			}
 			return List.of();
 		}

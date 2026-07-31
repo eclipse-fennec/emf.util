@@ -3,15 +3,11 @@ Bundle-Description: Pulls sensinact ProviderMapping and MappingProfile XMI insta
  from a remote Model Atlas (via its ReadableScopeService) and registers each as an \
  OSGi service for the sensinact mapping whiteboards. Sensor-model EPackages resolve \
  through the atlas client's fetch-on-miss package registry.
-Bundle-Version: 1.0.0.SNAPSHOT
 
 -workingset: SensiNact
 
 -library: enableEMF
 
 -buildpath: \
-	slf4j.api;version=latest,\
 	org.eclipse.fennec.sensinact.mapping;version=snapshot,\
 	org.eclipse.fennec.model.atlas.scope.api;version=latest
-
--privatepackage: org.eclipse.fennec.sensinact.mapping.atlas.impl

@@ -175,7 +175,7 @@ org.eclipse.fennec.bnd:org.eclipse.fennec.bnd.library:0.0.9
 org.eclipse.fennec.bnd:org.eclipse.fennec.jacoco.bnd.library:0.0.9
 org.eclipse.fennec.bnd:org.eclipse.fennec.osgitest.bnd.library:0.0.9
 
-org.bndtools:org.bndtools.templates.osgi:7.0.0
+org.bndtools:org.bndtools.templates.osgi:${bndversion}
 
 org.eclipse.fennec.emf:org.eclipse.fennec.emf.osgi.bnd.library.workspace:0.1.2-SNAPSHOT
 org.eclipse.osgi-technology.rest:org.eclipse.osgitech.rest.bnd.library:1.2.3

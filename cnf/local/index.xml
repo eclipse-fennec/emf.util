@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<repository xmlns="http://www.osgi.org/xmlns/repository/v1.0.0" name="Local" increment="1785383933257">
+<repository xmlns="http://www.osgi.org/xmlns/repository/v1.0.0" name="Local" increment="1785480070125">
   <resource>
     <capability namespace="osgi.identity">
       <attribute name="license" value="Eclipse Public License 2.0"/>
@@ -267,21 +267,45 @@
       <attribute name="documentation" value="https://github.com/eclipse-fennec/model.atlas"/>
       <attribute name="description" value="OSGi DS front-end for the Model Atlas client. P3-1: a ConfigAdmin factory component (PID org.eclipse.fennec.model.atlas.rest.client) that maps a configuration onto the shared ClientConfiguration and builds one plain-Java ModelAtlasClient per Atlas instance. EPackage publishing, resolution modes, drift substitution and ResourceSet integration are added by later Phase-3 tickets."/>
       <attribute name="type" value="osgi.bundle"/>
-      <attribute name="version" value="0.1.0.202607300357-SNAPSHOT" type="Version"/>
+      <attribute name="version" value="0.1.0.202607310640-SNAPSHOT" type="Version"/>
     </capability>
     <capability namespace="osgi.wiring.bundle">
-      <attribute name="bundle-version" value="0.1.0.202607300357-SNAPSHOT" type="Version"/>
+      <attribute name="bundle-version" value="0.1.0.202607310640-SNAPSHOT" type="Version"/>
       <attribute name="osgi.wiring.bundle" value="org.eclipse.fennec.model.atlas.rest.client.osgi"/>
     </capability>
     <capability namespace="osgi.wiring.host">
-      <attribute name="bundle-version" value="0.1.0.202607300357-SNAPSHOT" type="Version"/>
+      <attribute name="bundle-version" value="0.1.0.202607310640-SNAPSHOT" type="Version"/>
       <attribute name="osgi.wiring.host" value="org.eclipse.fennec.model.atlas.rest.client.osgi"/>
     </capability>
     <capability namespace="osgi.content">
-      <attribute name="size" value="113792" type="Long"/>
+      <attribute name="size" value="114484" type="Long"/>
       <attribute name="mime" value="application/vnd.osgi.bundle"/>
       <attribute name="url" value="org.eclipse.fennec.model.atlas.rest.client.osgi/org.eclipse.fennec.model.atlas.rest.client.osgi-0.1.0.jar"/>
-      <attribute name="osgi.content" value="1FB1AE7D1E46786B56ACEE482C1A22B9EF8E55835CD63CEDB16DE3964BF08C53"/>
+      <attribute name="osgi.content" value="45C7AAF271730D17865F41D5792BC8BAC5A5718BE8A882C75BE0B742572098F5"/>
+    </capability>
+    <capability namespace="osgi.service">
+      <directive name="uses" value="org.eclipse.emf.ecore"/>
+      <attribute name="objectClass" value="org.eclipse.emf.ecore.EFactory" type="List&lt;String&gt;"/>
+    </capability>
+    <capability namespace="osgi.service">
+      <directive name="uses" value="org.eclipse.emf.ecore"/>
+      <attribute name="objectClass" value="org.eclipse.emf.ecore.EPackage" type="List&lt;String&gt;"/>
+    </capability>
+    <capability namespace="osgi.service">
+      <directive name="uses" value="org.eclipse.emf.ecore"/>
+      <attribute name="objectClass" value="org.eclipse.emf.ecore.EPackage$Registry" type="List&lt;String&gt;"/>
+    </capability>
+    <capability namespace="osgi.service">
+      <directive name="uses" value="org.eclipse.fennec.emf.osgi.configurator,org.eclipse.emf.ecore"/>
+      <attribute name="objectClass" value="org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator" type="List&lt;String&gt;"/>
+    </capability>
+    <capability namespace="osgi.service">
+      <directive name="uses" value="org.eclipse.fennec.emf.osgi.configurator,org.eclipse.emf.ecore.resource"/>
+      <attribute name="objectClass" value="org.eclipse.fennec.emf.osgi.configurator.ResourceSetConfigurator" type="List&lt;String&gt;"/>
+    </capability>
+    <capability namespace="osgi.service">
+      <directive name="uses" value="org.eclipse.fennec.model.atlas.scope.api,org.eclipse.emf.ecore"/>
+      <attribute name="objectClass" value="org.eclipse.fennec.model.atlas.scope.api.ReadableScopeService" type="List&lt;String&gt;"/>
     </capability>
     <requirement namespace="osgi.wiring.package">
       <directive name="filter" value="(&amp;(osgi.wiring.package=jakarta.ws.rs.client)(version&gt;=3.1.0)(!(version&gt;=4.0.0)))"/>

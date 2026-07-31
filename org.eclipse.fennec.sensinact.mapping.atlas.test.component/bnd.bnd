@@ -4,19 +4,15 @@ Bundle-Description: Test-only southbound simulator: periodically renders a Weath
  ResourceSet (nsURI resolution local-first, then atlas fetch-on-miss) and pushes the \
  resulting EObjects into sensinact via the InstancePusher. If the model is unknown the \
  payload is logged and dropped. Not part of any release artifact.
-Bundle-Version: 1.0.0.SNAPSHOT
 
 -workingset: SensiNact
 
 -library: enableEMF
 
 -buildpath: \
-	slf4j.api;version=latest,\
 	org.eclipse.emf.ecore.xmi;version=latest,\
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	org.eclipse.fennec.sensinact.mapping;version=snapshot
 
 -includeresource: \
 	data=data
-
--privatepackage: org.eclipse.fennec.sensinact.mapping.atlas.test.component
