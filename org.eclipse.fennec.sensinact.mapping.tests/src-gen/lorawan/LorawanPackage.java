@@ -39,7 +39,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = LorawanPackage.eNS_URI, genModel = "/model/lora-test.genmodel", genModelSourceLocations = {"model/lora-test.genmodel","org.eclipse.fennec.sensinact.mapping.tests/model/lora-test.genmodel"}, ecore = "/model/lorawan-uplink.ecore", ecoreSourceLocations = "/model/lorawan-uplink.ecore")
+@EPackage(uri = LorawanPackage.eNS_URI, fingerprint = "fp1:5dbdc146c48d0acdc5eeaa4ca40bd77f95258561dc24ac97738b053f0cf97826", genModel = "/model/lora-test.genmodel", genModelSourceLocations = {"model/lora-test.genmodel","org.eclipse.fennec.sensinact.mapping.tests/model/lora-test.genmodel"}, ecore = "/model/lorawan-uplink.ecore", ecoreSourceLocations = "/model/lorawan-uplink.ecore")
 public interface LorawanPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

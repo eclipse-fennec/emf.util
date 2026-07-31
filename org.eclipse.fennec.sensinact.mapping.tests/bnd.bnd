@@ -29,7 +29,7 @@ src=${^src},src-gen
 	org.gecko.weather.model;version=latest,\
 	org.eclipse.fennec.sensinact.mapping;version=snapshot,\
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest
-	
+
 -includeresource: \
 	data=data,\
 	model=model

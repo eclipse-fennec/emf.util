@@ -32,6 +32,14 @@ import org.eclipse.fennec.sensinact.model.mapping.MappingPackage;
  */
 public class MappingEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:b780b24040ec79bd566c1891b9d01fcbf9e5593c92b7b776456b4f81510427ea";
+
 	private MappingPackage ePackage;
 
 	protected MappingEPackageConfigurator(MappingPackage ePackage){
@@ -69,6 +77,7 @@ public class MappingEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "mapping");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }
