@@ -21,4 +21,4 @@ concurrency:
 
 jobs:
   verify:
-    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@227b1dfa5f323fdd6d857d0a61fbaaf6e7288716 # v1.0.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
