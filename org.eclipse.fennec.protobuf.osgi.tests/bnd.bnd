@@ -9,6 +9,6 @@ Bundle-Description: EMF Protobuf OSGi Integration Test
 -buildpath: \
 	org.osgi.framework;version=latest,\
 	org.eclipse.fennec.protobuf;version=snapshot,\
-	org.eclipse.fennec.emf.osgi.api,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	com.google.protobuf;version=latest
 	

@@ -32,7 +32,7 @@ import org.eclipse.fennec.codec.constants.CodecOptions;
 import org.eclipse.fennec.codec.resource.CodecResource;
 import org.eclipse.fennec.codec.resource.CodecResourceFactory;
 import org.eclipse.fennec.codec.util.MetadataServiceFactory;
-import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
+import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
 import org.eclipse.fennec.model.openapi.SecurityScheme;
 import org.eclipse.fennec.openapi.ecore.OpenApiAnnotations;
 import org.eclipse.fennec.openapi.ecore.OpenApiModel;

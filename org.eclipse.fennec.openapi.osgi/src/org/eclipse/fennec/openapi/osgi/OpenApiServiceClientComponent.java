@@ -23,7 +23,7 @@ import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
+import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
 import org.eclipse.fennec.openapi.client.OpenApiAuth;
 import org.eclipse.fennec.openapi.client.OpenApiServiceClient;
 import org.eclipse.fennec.openapi.ecore.OpenApiImporter;

@@ -12,12 +12,17 @@ Bundle-Description: A ServiceClient implementation that invokes OpenAPI operatio
 	org.eclipse.fennec.openapi.model;version=latest,\
 	org.eclipse.fennec.codec;version=latest,\
 	org.eclipse.fennec.codec.api;version=latest,\
-	org.eclipse.fennec.model.metadata;version="[0.1,0.2)",\
+	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
 	tools.jackson.core.jackson-core;version=latest,\
 	tools.jackson.core.jackson-databind;version=latest
 
+# org.eclipse.fennec.emf.osgi.component.minimal: only for the non-OSGi bootstrap
+# MetadataServiceFactory.create() -> MetadataServices, which reads the default
+# FingerprintService from FingerprintHelper (package org.eclipse.fennec.emf.osgi.fingerprint.util,
+# not exported by ...emf.osgi.api). In OSGi the component bundle supplies it.
 -testpath: \
 	assertj-core;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
 	org.eclipse.fennec.codec.openapi;version=latest,\
 	org.eclipse.fennec.codec.jsonschema;version=latest,\
 	org.eclipse.fennec.codec.metadata;version=latest,\

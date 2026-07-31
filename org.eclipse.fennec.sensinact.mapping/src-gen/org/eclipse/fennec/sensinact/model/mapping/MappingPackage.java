@@ -44,7 +44,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = MappingPackage.eNS_URI, genModel = "/model/sensinact-mapping.genmodel", genModelSourceLocations = {"model/sensinact-mapping.genmodel","org.eclipse.fennec.sensinact.mapping/model/sensinact-mapping.genmodel"}, ecore = "/model/sensinact-mapping.ecore", ecoreSourceLocations = "/model/sensinact-mapping.ecore")
+@EPackage(uri = MappingPackage.eNS_URI, fingerprint = "fp1:d535a4617bfd48b4fc11a6cc8592e7c39c566d20f1eb0e86a13ac189ec44b268", genModel = "/model/sensinact-mapping.genmodel", genModelSourceLocations = {"model/sensinact-mapping.genmodel","org.eclipse.fennec.sensinact.mapping/model/sensinact-mapping.genmodel"}, ecore = "/model/sensinact-mapping.ecore", ecoreSourceLocations = "/model/sensinact-mapping.ecore")
 public interface MappingPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
