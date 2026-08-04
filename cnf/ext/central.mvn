@@ -186,9 +186,13 @@ org.eclipse.fennec.models:org.eclipse.fennec.common.models.library:0.0.1-SNAPSHO
 
 org.geckoprojects.weather:org.gecko.weather.model:1.1.0-SNAPSHOT
 
-org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.api:0.1.0-SNAPSHOT
-org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.impl:0.1.0-SNAPSHOT
-org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.osgi:0.1.0-SNAPSHOT
-org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.scope.api:0.1.0-SNAPSHOT
+# TEMPORARILY disabled while testing unpublished atlas client builds from the
+# cnf/local repo (see cnf/ext/local.bnd) — the published 0.1.0-SNAPSHOT would
+# shadow the local timestamped snapshots in the resolver. Restore together with
+# removing cnf/ext/local.bnd once the new snapshots are on Central.
+#org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.api:0.1.0-SNAPSHOT
+#org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.impl:0.1.0-SNAPSHOT
+#org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.osgi:0.1.0-SNAPSHOT
+#org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.scope.api:0.1.0-SNAPSHOT
 
 
