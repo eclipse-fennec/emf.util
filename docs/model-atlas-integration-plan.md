@@ -4,6 +4,8 @@ Status: implemented (2026-07-28) — all five steps done on branch `model_atlas_
 the end-to-end OSGi IT (`org.eclipse.fennec.sensinact.mapping.atlas.tests`) is green.
 Live test against a real (jena) atlas verified green 2026-07-30 — see
 [Live-test verification](#live-test-verification-2026-07-30-green-end-to-end) at the bottom.
+The generalization follow-up is planned separately — see
+[Follow-up (2026-08-04)](#follow-up-2026-08-04-generalization-plan-settled--see-the-separate-plan-doc).
 Deviation found while testing: the `.tests` bndrun additionally needs
 `bnd.identity;id='org.apache.aries.typedevent.bus'` — the resolver does not pull the typed-event
 bus on its own, and without it the sensinact `GatewayThread` (and thus `ProviderMappingRegistry`)
@@ -14,6 +16,11 @@ never starts.
 The sensinact mapping utility already lives in this repo (`org.eclipse.fennec.sensinact.mapping`): a generated mapping metamodel (nsURI `https://fennec.eclipse.org/sensinact/core/mapping/1.0`) plus whiteboard registries — `ProviderMappingRegistryImpl.registerModelMapping(ProviderMapping)` and `MappingProfileRegistryImpl.addProfile(MappingProfile)` are `@Reference(MULTIPLE, DYNAMIC)`, so any OSGi service of those types is picked up automatically. **But nothing in the repo actually loads mapping XMIs** — consumers (e.g. the urban-data-platform backend, which loads them manually from bundle-embedded files) must supply them.
 
 Goal: pull the mapping XMI instances **and** the sensor-model EPackages they reference from a remote **Model Atlas**, using the atlas REST client from the `model.atlas` workspace — consumed as **local jars** for now (not yet published to Maven). All work happens in fennec-emf.util; the urban-data-platform is only the motivating use case and is not touched.
+
+> **Update 2026-07-31:** the local-jar setup is history — model.atlas now publishes to
+> Maven Central snapshots (group `org.eclipse.fennec.model.atlas`). The four client GAVs
+> (`0.1.0-SNAPSHOT`) live in `cnf/ext/central.mvn`; the `cnf/local` LocalIndexedRepo and
+> the committed jars were removed. Step 1 below is kept for history only.
 
 Decisions already made:
 
@@ -29,7 +36,7 @@ Verified load-bearing facts:
 - Jackson: the atlas `rest.client.impl` has been moved to Jackson **3** (`tools.jackson.*`), which this workspace already provides (via the fennecCodec library) — no extra Jackson dependency needed. The committed local jars must be built from that state of model.atlas.
 - All four needed jars exist at `<model.atlas>/<bsn>/generated/<bsn>.jar` (never use `build/libs/` — those are empty stubs from the plain Gradle `java` plugin).
 
-## Step 1 — Local jar repository (`cnf/local`)
+## Step 1 — Local jar repository (`cnf/local`) *(superseded 2026-07-31 — client now on Maven Central snapshots, see update note above)*
 
 No writable/local repo exists today (`cnf/build.bnd` has only `-fixupmessages`; the comment in `cnf/ext/fennec.bnd:1-7` claiming the base template provides Local/Release repos is stale). Add to **`cnf/build.bnd`**:
 
@@ -212,8 +219,35 @@ blockers were on the model.atlas side, both fixed there on branch `atlas_client_
   saw a corrupted instance. The writer now serializes an `EcoreUtil.copy` and discards
   the response resource (same fix in `JsonSchemaMessageBodyReaderWriter`).
 
-The four `cnf/local` client jars were refreshed from that build (2026-07-30). Older
-client jars lack the `heldNsUris()` drift coverage, and an older atlas *server* still
-carries the detach-on-serve bug. The `xsi:schemaLocation`/AIOOBE upload gotcha above was
+The four `cnf/local` client jars were refreshed from that build (2026-07-30); on
+2026-07-31 the local jars were replaced entirely by the Maven Central snapshot GAVs
+(see the update note at the top). Client snapshots must be from a build ≥ 2026-07-31 —
+older ones lack the `heldNsUris()` drift coverage and the client-side `osgi.service`
+capabilities, and an older atlas *server* still carries the detach-on-serve bug. The `xsi:schemaLocation`/AIOOBE upload gotcha above was
 fixed separately the same day in fennec-codec's `codec.rest` — the strip-before-upload
 workaround is only needed against older atlas server builds.
+
+## Follow-up (2026-08-04): generalization plan settled — see the separate plan doc
+
+The generalization question this plan left open (is the source component's connection
+pattern worth extracting?) is answered in
+[model-atlas-source-generalization-plan.md](model-atlas-source-generalization-plan.md),
+revised 2026-08-04 into a two-level shape:
+
+- **Target architecture (Revision 2, decided):** a generic, **named EObject registry in
+  emf.osgi** (`org.eclipse.fennec.emf.osgi.eobject.registry`) that whiteboard
+  `EObjectProvider`s feed and consumers query/listen to — individual EObjects are no
+  longer published as OSGi services there. Tracked as GitHub issues in
+  eclipse-fennec/emf.osgi. Long-term, `ProviderMappingRegistry`/`MappingProfileRegistry`
+  become thin typed facades over one named registry instance and the
+  `sensinact.mapping.atlas` component dissolves into atlas-provider configuration.
+- **Interim step in this repo (Revision 3, part 1 of that doc):** extract the sync engine
+  of `AtlasMappingSourceComponent` into a **plain-Java** bundle
+  `org.eclipse.fennec.model.atlas.eobject.provider` (named for its future role and home:
+  the atlas `EObjectProvider` implementation, to be moved to the model.atlas repo)
+  feeding an `AtlasObjectSink`; the sensinact component shrinks to a thin adapter that
+  owns service publication (PID, OCD, `@Capability`s, register-before-unregister) with
+  **no behavior or config change** — everything this plan built keeps working unchanged
+  until the emf.osgi registry ships.
+
+Status: awaiting approval, not started.
