@@ -34,6 +34,10 @@ Bundle-Version: 1.0.0.SNAPSHOT
 	org.eclipse.sensinact.gateway.core.api;version=latest,\
 	org.eclipse.sensinact.gateway.core.models.provider;version=latest,\
 	org.eclipse.sensinact.gateway.core.geo-json;version=latest,\
-	org.eclipse.sensinact.gateway.core.emf-api,\
-	tools.jackson.core.jackson-core,\
-	tools.jackson.core.jackson-databind
+	org.eclipse.sensinact.gateway.core.emf-api;version=latest,\
+	tools.jackson.core.jackson-core;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest,\
+
+Import-Package: \
+        org.eclipse.sensinact.*;resolution:=optional,\
+        *
