@@ -9,6 +9,16 @@ sketches with the real issue numbers) once filed.
 Suggested order: 1 → 2 → 3 → 4 (5/6 anytime). 2 can start once 1's bundle skeleton
 builds; 3 needs 1 + 2.
 
+> **Status 2026-08-05: issues 1–4 are done** (implemented with commit `af7e3ee`,
+> "solves issue#22"). The blocks below are kept as the record of scope and acceptance,
+> not as open work. `./gradlew clean build testOSGi` is green, and the **live test
+> against the jena atlas passed on the new pipeline** (migrated configs in
+> `…atlas.local.config`). Issue 6 was fixed upstream the same day; issue 7 has landed
+> too — the consumed `org.eclipse.fennec.emf.osgi.eobject.registry` 1.1.0-SNAPSHOT
+> declares the two `osgi.service` capabilities, so `…atlas.runtime/launch.bndrun`
+> resolves without the `-runprovidedcapabilities` workaround. Only optional issue 5
+> remains.
+
 ---
 
 ## Issue 0 (parent): Adopt the emf.osgi EObject registry for the sensinact mapping atlas integration
@@ -32,13 +42,13 @@ parent tracks moving our Model Atlas integration onto it, per
 
 Sub-issues:
 
-- [ ] #__ Atlas writer client bundle (`model.atlas.eobject.provider`)
-- [ ] #__ Sensinact facades over named registries; retire `sensinact.mapping.atlas`
-- [ ] #__ Integration tests + runtime configuration migration + live test
-- [ ] #__ Documentation
+- [x] Atlas writer client bundle (`model.atlas.eobject.provider`)
+- [x] Sensinact facades over named registries; retire `sensinact.mapping.atlas`
+- [x] Integration tests + runtime configuration migration + live test
+- [x] Documentation
 - [ ] #__ *(optional)* Metadata-bridge anchor resolver for provider mappings
 - [x] *(upstream)* ~~ship `eobject.registry` in the `fennecEMF` library~~ — fixed in emf.osgi 2026-08-05, no issue needed
-- [ ] eclipse-fennec/emf.osgi#__ *(upstream)* declare `osgi.service` capabilities for the registry faces (fix underway)
+- [x] *(upstream)* ~~declare `osgi.service` capabilities for the registry faces~~ — landed in emf.osgi 2026-08-05, no workaround needed
 
 ---
 
@@ -46,6 +56,7 @@ Sub-issues:
 
 **Labels:** enhancement
 **Estimate:** ~2–3 d
+**Status:** done (2026-08-05)
 
 Extract the sync engine of `AtlasMappingSourceComponent` into a reusable, generic bundle
 that pushes atlas content into a named emf.osgi EObject registry through
@@ -57,31 +68,31 @@ dependency, no per-object services. Design: plan Revision 5, section "New bundle
 - [x] Wiring: ~~pin the registry GAV in `cnf/ext/central.mvn`~~ — obsolete: the
       `fennecEMF` library ships the registry bundles since the upstream fix
       (2026-08-05); nothing to pin, just verify resolution
-- [ ] Bundle skeleton: `bnd.bnd` (`-buildpath`: `model.atlas.scope.api`,
+- [x] Bundle skeleton: `bnd.bnd` (`-buildpath`: `model.atlas.scope.api`,
       `emf.osgi.eobject.registry`, `-library: enableEMF`), `@Export`/`@Version`
       `package-info.java`
-- [ ] `AtlasObjectSync` (plain Java, `AutoCloseable`): scheduling moved verbatim
+- [x] `AtlasObjectSync` (plain Java, `AutoCloseable`): scheduling moved verbatim
       (private executor, initial load → retry → refresh); package-private ctor taking
       the `ScheduledExecutorService` for tests
-- [ ] Sync semantics: complete pass per atlas registry →
+- [x] Sync semantics: complete pass per atlas registry →
       `writer.sync("<provider>:<atlas-registry>", entries)`; partial pass → granular
       `writer.put` only, **no removals**, pass counts incomplete
-- [ ] Key derivation: `key.feature` config (mirrors `FileEObjectProvider.featureKeys`),
+- [x] Key derivation: `key.feature` config (mirrors `FileEObjectProvider.featureKeys`),
       fallback = atlas object id; skip + log objects without key value
-- [ ] Entry properties: `atlas.scope`, `atlas.registry`, `atlas.stage`,
+- [x] Entry properties: `atlas.scope`, `atlas.registry`, `atlas.stage`,
       `atlas.object.id`, `emf.nsURI`
-- [ ] Required-nsURI gate (`required.nsuris` config): missing + never seen → pass
+- [x] Required-nsURI gate (`required.nsuris` config): missing + never seen → pass
       incomplete (retry); once resolved → hold instance, `putIfAbsent` per pass
-- [ ] DS factory component `AtlasEObjectProvider` (`REQUIRE`, `@Designate(factory=true)`,
+- [x] DS factory component `AtlasEObjectProvider` (`REQUIRE`, `@Designate(factory=true)`,
       OCD): `atlasScope.target`, `emf.eobject.registry.name` (→ `writer.target`),
       `emf.eobject.provider.name`, `registries`, `object.ids`, `stage`, `key.feature`,
       `required.nsuris`, `refresh.interval.ms`, `retry.interval.ms`
-- [ ] Plain-JUnit tests (mocked scope service, recording writer): source-tag scoping,
+- [x] Plain-JUnit tests (mocked scope service, recording writer): source-tag scoping,
       partial-pass fallback, explicit object ids, stage propagation, key extraction,
       nsURI gating, retry→refresh transition, close-during-sync;
       `-testpath: assertj-core;version=latest`
-- [ ] Add bundle to `coverageFloorBundles` in `build.gradle`
-- [ ] `./gradlew clean build` green
+- [x] Add bundle to `coverageFloorBundles` in `build.gradle`
+- [x] `./gradlew clean build` green
 
 **Acceptance:** the bundle builds and is fully covered by plain-JUnit tests; nothing in
 it references sensinact or `org.osgi.framework`; a transient failure of one atlas
@@ -93,6 +104,7 @@ registry never removes entries of another.
 
 **Labels:** enhancement
 **Estimate:** ~1–2 d
+**Status:** done (2026-08-05)
 
 Replace the per-object service whiteboards in `org.eclipse.fennec.sensinact.mapping`
 with `EObjectRegistryListener` whiteboard services over two named registries, and delete
@@ -101,23 +113,23 @@ with `EObjectRegistryListener` whiteboard services over two named registries, an
 
 **Tasks**
 
-- [ ] `ProviderMappingRegistryImpl`: drop the `ProviderMapping` reference whiteboard;
+- [x] `ProviderMappingRegistryImpl`: drop the `ProviderMapping` reference whiteboard;
       register as `EObjectRegistryListener` with
       `emf.eobject.registry.name=sensinact-mappings` (name configurable, sensible
       default); keep EClass index + gateway push; `entryUpdated(new, old)` handled
       index-new-then-drop-old
-- [ ] Move validation from the old atlas component into the listener: type dispatch,
+- [x] Move validation from the old atlas component into the listener: type dispatch,
       `mid` non-blank, provider classes present and resolved — skip + log on failure
       (now also covers file-sourced content)
-- [ ] `MappingProfileRegistryImpl`: same pattern on `sensinact-profiles`
+- [x] `MappingProfileRegistryImpl`: same pattern on `sensinact-profiles`
       (`profileId` keys); keep the programmatic register/unregister API
-- [ ] Delete `org.eclipse.fennec.sensinact.mapping.atlas` (component, config, bundle,
+- [x] Delete `org.eclipse.fennec.sensinact.mapping.atlas` (component, config, bundle,
       `@Capability` declarations); remove from `settings.gradle`/workspace as needed
-- [ ] Adjust `org.eclipse.fennec.sensinact.mapping` `bnd.bnd` (buildpath:
+- [x] Adjust `org.eclipse.fennec.sensinact.mapping` `bnd.bnd` (buildpath:
       `emf.osgi.eobject.registry`)
-- [ ] Unit tests in `mapping.tests`: listener add/update/remove against a plain-Java
+- [x] Unit tests in `mapping.tests`: listener add/update/remove against a plain-Java
       registry (`EObjectRegistries.createRegistry`), validation skips, replay-on-bind
-- [ ] `./gradlew clean build` green
+- [x] `./gradlew clean build` green
 
 **Acceptance:** no per-object mapping/profile services anywhere; facades fed exclusively
 through registries; validation identical for file- and atlas-sourced content; public
@@ -129,6 +141,7 @@ API consumers (`InstancePusherImpl`, mapper) untouched.
 
 **Labels:** test
 **Estimate:** ~1–2 d
+**Status:** done (2026-08-05) — full build incl. `testOSGi` green; jena live test green
 
 Rewrite the Felix IT for the new pipeline (mock atlas → atlas provider → registries →
 facades → sensinact twin) and migrate all deployment configs off the retired factory
@@ -136,21 +149,24 @@ PID `org.eclipse.fennec.sensinact.mapping.atlas`.
 
 **Tasks**
 
-- [ ] Rewrite `org.eclipse.fennec.sensinact.mapping.atlas.tests` IT: replace
+- [x] Rewrite `org.eclipse.fennec.sensinact.mapping.atlas.tests` IT: replace
       per-object-service assertions with registry-entry assertions (`atlas.*` +
       `emf.nsURI` entry properties, keys = `mid`/`profileId`); keep the sensinact-level
       invariants (mapping reaches `ProviderMappingRegistry` by EClass, provider classes
       resolve against the atlas, `InstancePusher` round-trip)
-- [ ] Cover the model-bundle-late case (required-nsURI gate) and the
-      source-loss/refresh cases end-to-end
-- [ ] Wire the three-config setup in the IT (`FileEObjectProvider~…`,
+- [x] Cover the model-bundle-late case (required-nsURI gate) and the
+      source-loss/refresh cases end-to-end — source-loss/refresh is covered in the IT
+      (`refreshRemovesObjectsGoneFromTheAtlas`); the nsURI gate ended up covered by the
+      engine's plain-JUnit test (`requiredNsUriPostponesPassUntilResolvedThenRePins`)
+      instead of end-to-end
+- [x] Wire the three-config setup in the IT (`FileEObjectProvider~…`,
       `EObjectRegistry~…`, `AtlasEObjectProvider~…`), incl. empty-locations file
       provider as initial provider
-- [ ] Migrate `org.eclipse.fennec.sensinact.mapping.atlas.local.config/configs/config.json`
-- [ ] Update `…mapping.atlas.runtime/launch.bndrun`; re-resolve all affected bndruns
+- [x] Migrate `org.eclipse.fennec.sensinact.mapping.atlas.local.config/configs/config.json`
+- [x] Update `…mapping.atlas.runtime/launch.bndrun`; re-resolve all affected bndruns
       (`resolve.test` gotcha for `testOSGi` applies)
-- [ ] `./gradlew clean build testOSGi` green
-- [ ] Live test against the jena atlas (`http://localhost:8086/atlas/rest`) — mappings
+- [x] `./gradlew clean build testOSGi` green
+- [x] Live test against the jena atlas (`http://localhost:8086/atlas/rest`) — mappings
       appear, refresh works, atlas outage keeps content
 
 **Acceptance:** full build incl. `testOSGi` green; live test against the jena atlas
@@ -162,15 +178,16 @@ reproduces the 2026-07-30 result on the new pipeline.
 
 **Labels:** documentation
 **Estimate:** ~0.5 d
+**Status:** done (2026-08-05)
 
-- [ ] `docs/sensinact-mapping-user-guide.md`: atlas section rewritten to the
+- [x] `docs/sensinact-mapping-user-guide.md`: atlas section rewritten to the
       three-config wiring; link the emf.osgi eobject-registry guide
-- [ ] CLAUDE.md: Model Atlas integration section updated (bundle list, config shape,
+- [x] CLAUDE.md: Model Atlas integration section updated (bundle list, config shape,
       retired bundle)
-- [ ] `docs/model-atlas-integration-plan.md`: close the generalization open question
-- [ ] `docs/model-atlas-source-generalization-plan.md`: mark Revision 5 done / final
+- [x] `docs/model-atlas-integration-plan.md`: close the generalization open question
+- [x] `docs/model-atlas-source-generalization-plan.md`: mark Revision 5 done / final
       outcome note
-- [ ] Check `docs-site/guides.mjs` allowlist still matches
+- [x] Check `docs-site/guides.mjs` allowlist still matches
 
 ---
 

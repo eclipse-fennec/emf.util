@@ -37,6 +37,31 @@ needs) resolves.
 |---|---|
 | `org.eclipse.fennec.protobuf` | EMF ⇄ Protobuf core (plain Java) |
 | `org.eclipse.fennec.protobuf.osgi` | Protobuf `Resource.Factory` OSGi service |
+| `org.eclipse.fennec.protobuf.ecore` | Protobuf descriptor → Ecore importer (design time) |
+| `org.eclipse.fennec.soap` | SOAP 1.1 envelope (de)serialization core |
+| `org.eclipse.fennec.soap.osgi` | SOAP `Resource.Factory` OSGi service |
+| `org.eclipse.fennec.soap.ecore` | WSDL/XSD → Ecore converter (design time, pulls `org.eclipse.xsd`) |
+| `org.eclipse.fennec.openapi.ecore` | OpenAPI 3 → Ecore importer |
+| `org.eclipse.fennec.openapi.client` | OpenAPI REST `ServiceClient` |
+| `org.eclipse.fennec.openapi.osgi` | Config-driven OpenAPI `ServiceClient` OSGi component |
+| `org.eclipse.fennec.grpc` | gRPC client + server over EMF instances (with the `io.grpc.netty` wrap bundle) |
+| `org.eclipse.fennec.service.api` | The protocol-agnostic `ServiceClient` / `ServiceOperation` API |
+| `org.eclipse.fennec.sensinact.mapping` | SensiNact mapping metamodel + runtime (see the note below) |
+
+The exact set is the `-runrequires` of
+`org.eclipse.fennec.util.workspace.library/required.bndrun`, and the index carries the
+resolved closure of those bundles. Two consequences worth knowing:
+
+- **The SensiNact gateway is not in the closure.** `org.eclipse.fennec.sensinact.mapping`
+  imports `org.eclipse.sensinact.*` as *optional*, so enabling `fennecUtil` gives you the
+  mapping bundle without dragging the SensiNact gateway bundles into every workspace.
+  A runtime that actually maps into a digital twin has to supply the gateway itself
+  (`org.eclipse.sensinact.gateway.core.*`, e.g. from the sensinact distribution).
+- **Not every bundle in the repo is in the library** — the Model Atlas EObject provider
+  (`org.eclipse.fennec.model.atlas.eobject.provider`) and the SOAP client
+  (`org.eclipse.fennec.soap.client`) are not required by it, so `-library: fennecUtil`
+  alone will not resolve them; index those artifacts explicitly in your own
+  `central.mvn` when you need them.
 
 ## As a plain Maven / Gradle dependency
 

@@ -3,10 +3,12 @@
 Status: **implemented 2026-08-05** (proposed 2026-08-03, revised 2026-08-04, reshaped
 same day it was implemented) — Part 2 (the emf.osgi registry) shipped upstream; Part 1
 was rewritten below (Revision 5) to target it directly and is done: provider bundle +
-facade refactor + IT rewrite + config migration, full `build testOSGi` green. Still
-open: the live re-test against the jena atlas (migrated configs in
-`…atlas.local.config`), filing the issues, and the upstream emf.osgi `@Capability` fix
-(underway; the library-wiring gap was already fixed upstream 2026-08-05). Follow-up to
+facade refactor + IT rewrite + config migration, full `build testOSGi` green, and the
+**live test against the jena atlas green on the new pipeline** (migrated configs in
+`…atlas.local.config`). Both upstream emf.osgi gaps are closed too: the library-wiring
+gap and the missing `osgi.service` capabilities on the registry faces (so no
+`-runprovidedcapabilities` workaround is needed in `…atlas.runtime/launch.bndrun`).
+Follow-up to
 [model-atlas-integration-plan.md](model-atlas-integration-plan.md), which left the
 generalization question open.
 
@@ -344,5 +346,5 @@ in either place.
 | Piece | Home | Status |
 |---|---|---|
 | `org.eclipse.fennec.emf.osgi.eobject.registry` (+ `.metadata`, `.itest`) | emf.osgi | ✅ shipped (snapshot) |
-| atlas writer client `org.eclipse.fennec.model.atlas.eobject.provider` | emf.util first, later model.atlas | **next — issue 1** |
-| sensinact facades over named registries; `sensinact.mapping.atlas` retired | emf.util | **next — issues 2–3** |
+| atlas writer client `org.eclipse.fennec.model.atlas.eobject.provider` | emf.util first, later model.atlas | ✅ implemented (2026-08-05) |
+| sensinact facades over named registries; `sensinact.mapping.atlas` retired | emf.util | ✅ implemented (2026-08-05) — build + `testOSGi` + jena live test green |

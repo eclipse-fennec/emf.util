@@ -659,6 +659,18 @@ Three pieces cooperate — none of them sensinact-specific:
 state (the file provider then only gates the registry's publication). Profiles get their
 own trio on a registry `sensinact-profiles` with `key.feature=profileId`.
 
+**Migrating from the earlier single-config shape.** Up to 2026-08 one factory config for
+PID `org.eclipse.fennec.sensinact.mapping.atlas` did the whole job and published each
+mapping as an OSGi service. That bundle and its PID are **retired**; replace each of its
+configs with the registry trio above. The atlas rest-client config is unchanged, and
+`atlasScope.target`, `registries` and `refresh.interval.ms` carry over verbatim into the
+`AtlasEObjectProvider` config — what is new is `writer.target` (which registry to feed),
+`emf.eobject.provider.name` (the source tag), `key.feature` (`mid` / `profileId`, so
+entries are keyed by the domain id rather than the atlas object id) and `required.nsuris`
+(the mapping metamodel gate, previously compiled into the component). The
+`ProviderMappingRegistry` / `MappingProfileRegistry` / `InstancePusher` APIs are
+unchanged, so nothing on the consumer side moves.
+
 Atlas-provider configuration (factory PID `AtlasEObjectProvider`):
 
 | Property | Default | Meaning |
