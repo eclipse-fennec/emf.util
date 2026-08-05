@@ -50,22 +50,22 @@ public interface ServiceMapping extends Mapping {
 	EList<ResourceMapping> getResources();
 
 	/**
-	 * Returns the value of the '<em><b>Referenced Resource</b></em>' reference.
+	 * Returns the value of the '<em><b>Referenced Resource</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Referenced Resource</em>' reference.
+	 * @return the value of the '<em>Referenced Resource</em>' containment reference.
 	 * @see #setReferencedResource(ReferenceMapping)
 	 * @see org.eclipse.fennec.sensinact.model.mapping.MappingPackage#getServiceMapping_ReferencedResource()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	ReferenceMapping getReferencedResource();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.sensinact.model.mapping.ServiceMapping#getReferencedResource <em>Referenced Resource</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.sensinact.model.mapping.ServiceMapping#getReferencedResource <em>Referenced Resource</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Referenced Resource</em>' reference.
+	 * @param value the new value of the '<em>Referenced Resource</em>' containment reference.
 	 * @see #getReferencedResource()
 	 * @generated
 	 */

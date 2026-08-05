@@ -243,20 +243,9 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
   test that runs the whole codec stack** — resolves via `resolve.test`, needs
   `-runsystempackages: com.sun.net.httpserver`; the codec's `MetadataServiceComponent` +
   `CodecAspectProviderComponent` supply the whiteboard). Sets the pattern for `soap.client`/`grpc`.
-- **Metadata home (2026-07-31):** the metadata service moved out of the standalone
-  `org.eclipse.fennec.model.metadata` repo into **emf.osgi** — bundle
-  `org.eclipse.fennec.emf.osgi.metadata`, package `org.eclipse.fennec.emf.osgi.metadata`
-  (`MetadataService`/`MetadataWhiteboard`/`MetadataServices`). It ships with the `fennecEMF`
-  library (emf.osgi 1.1.0-SNAPSHOT), so `fennecEMFMetadata` and its central.mvn artifact are
-  gone and the old two-sources-same-BSN pin (`[0.1,0.2)`) is obsolete. Two follow-ups:
-  the non-OSGi bootstrap `MetadataServiceFactory.create()` reaches `FingerprintHelper`
-  (`…emf.osgi.fingerprint.util`, NOT exported by `…emf.osgi.api`), so plain-JUnit projects that
-  use it need `org.eclipse.fennec.emf.osgi.component.minimal` on the `-testpath`; and every
-  `…emf.osgi.*` buildpath entry must carry an explicit `version=latest` — without it bnd still
-  picks the stale 0.1.2 jar from the local m2 and its inlined annotations shadow the 1.1.0 API
-  (`@EPackage.fingerprint` / `EMFNamespaces.EMF_MODEL_FINGERPRINT` "not found").
-  After bumping the library in `central.mvn`, clear `cnf/cache/<bndversion>/expanded` so the new
-  library content is unpacked.
+- **Dependency gotcha:** BSN `org.eclipse.fennec.model.metadata` exists from TWO sources
+  (fennecCodec 0.1.0 with `api.MetadataService`, fennecEMFMetadata 1.0.0 without) — pin
+  `version="[0.1,0.2)"` on build/test paths or `version=latest` picks the wrong one.
 - **Remote tests** (`@Tag("remote")`, excluded from `build`; run `./gradlew remoteTest`): validate
   the design against public endpoints (Swagger petstore). Server-side outages are JUnit
   *assumptions* (skips), not failures. With `api_key`/bearer auth registered, all three petstore

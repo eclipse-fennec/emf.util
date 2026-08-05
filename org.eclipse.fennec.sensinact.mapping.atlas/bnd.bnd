@@ -1,0 +1,13 @@
+Bundle-Name: SensiNact Mapping - Model Atlas Source
+Bundle-Description: Pulls sensinact ProviderMapping and MappingProfile XMI instances \
+ from a remote Model Atlas (via its ReadableScopeService) and registers each as an \
+ OSGi service for the sensinact mapping whiteboards. Sensor-model EPackages resolve \
+ through the atlas client's fetch-on-miss package registry.
+
+-workingset: SensiNact
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.fennec.sensinact.mapping;version=snapshot,\
+	org.eclipse.fennec.model.atlas.scope.api;version=latest

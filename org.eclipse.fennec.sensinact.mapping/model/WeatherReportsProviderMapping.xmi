@@ -5,7 +5,6 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
     xmlns:sensinactMapping="https://fennec.eclipse.org/sensinact/core/mapping/1.0"
-    xsi:schemaLocation="https://fennec.eclipse.org/sensinact/core/mapping/1.0 sensinact-mapping.ecore"
     mid="dwd-weather-reports"
     providerTimestamp="false">
 
@@ -29,8 +28,7 @@
   <!-- Admin service - uses first report (index 0) -->
   <admin
       xsi:type="sensinactMapping:AdminMapping"
-      mid="admin"
-      collectionIndex="0">
+      mid="admin">
     <timestamp
         strategy="FEATURE">
       <featurePath
@@ -38,9 +36,14 @@
           href="http://cdc.dwd.de/common/weather#//WeatherReport/timestamp"/>
     </timestamp>
     <name name="Admin"/>
-    <collectionFeature
-        xsi:type="ecore:EReference"
-        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+    <!-- Selector only (exclude="false", no filter): this service's source is reports[0] -->
+    <referencedResource
+        collectionIndex="0"
+        exclude="false">
+      <featurePath
+          xsi:type="ecore:EReference"
+          href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+    </referencedResource>
     <friendlyNameFeature
         xsi:type="ecore:EReference"
         href="http://cdc.dwd.de/common/weather#//WeatherReport/station"/>
@@ -71,8 +74,7 @@
 
   <!-- Current Weather service - maps from reports[0] -->
   <services
-      mid="currentWeather"
-      collectionIndex="0">
+      mid="currentWeather">
     <timestamp
         strategy="FEATURE">
       <featurePath
@@ -80,9 +82,16 @@
           href="http://cdc.dwd.de/common/weather#//WeatherReport/timestamp"/>
     </timestamp>
     <name name="Current Weather"/>
-    <collectionFeature
-        xsi:type="ecore:EReference"
-        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+    <!-- Selector only (exclude="false", no filter): this service's source is reports[0] -->
+    <referencedResource
+        collectionIndex="0"
+        exclude="false">
+      <featurePath
+          xsi:type="ecore:EReference"
+          href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+      <targetEClass
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport"/>
+    </referencedResource>
 
     <!-- Wind resources -->
     <resources
@@ -231,8 +240,7 @@
 
   <!-- 3H Forecast service - maps from reports[1] -->
   <services
-      mid="forecast3H"
-      collectionIndex="1">
+      mid="forecast3H">
     <timestamp
         strategy="FEATURE">
       <featurePath
@@ -240,9 +248,16 @@
           href="http://cdc.dwd.de/common/weather#//WeatherReport/timestamp"/>
     </timestamp>
     <name name="3H Forecast"/>
-    <collectionFeature
-        xsi:type="ecore:EReference"
-        href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+    <!-- Selector only (exclude="false", no filter): this service's source is reports[1] -->
+    <referencedResource
+        collectionIndex="1"
+        exclude="false">
+      <featurePath
+          xsi:type="ecore:EReference"
+          href="http://cdc.dwd.de/common/weather#//WeatherReports/reports"/>
+      <targetEClass
+          href="http://cdc.dwd.de/common/weather#//MOSMIXSWeatherReport"/>
+    </referencedResource>
 
     <!-- Wind resources -->
     <resources

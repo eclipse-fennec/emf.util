@@ -1,0 +1,18 @@
+Bundle-Name: SensiNact Mapping Atlas - Live Test Simulator
+Bundle-Description: Test-only southbound simulator: periodically renders a WeatherReports \
+ XMI payload (like an external device would send it), loads it through the runtime \
+ ResourceSet (nsURI resolution local-first, then atlas fetch-on-miss) and pushes the \
+ resulting EObjects into sensinact via the InstancePusher. If the model is unknown the \
+ payload is logged and dropped. Not part of any release artifact.
+
+-workingset: SensiNact
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.emf.ecore.xmi;version=latest,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.sensinact.mapping;version=snapshot
+
+-includeresource: \
+	data=data
