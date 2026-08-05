@@ -37,7 +37,7 @@ Bundle-Version: 1.0.0.SNAPSHOT
 	org.eclipse.sensinact.gateway.core.emf-api;version=latest,\
 	tools.jackson.core.jackson-core;version=latest,\
 	tools.jackson.core.jackson-databind;version=latest,\
-	
+
 Import-Package: \
         org.eclipse.sensinact.*;resolution:=optional,\
         *
