@@ -6,7 +6,12 @@ Bundle-Description: EMF OpenAPI Client OSGi Integration Test
 	enableOSGi-Test,\
 	enableEMF
 
+# org.eclipse.fennec.openapi.osgi is the bundle under test (see -runrequires in test.bndrun).
+# It is on the buildpath so bnd/Gradle know this project depends on it: without that edge
+# `resolve.test` can run before the .osgi jar is built (races under --parallel) and the
+# resolution fails on osgi.identity=org.eclipse.fennec.openapi.osgi.
 -buildpath: \
 	org.osgi.framework;version=latest,\
 	org.osgi.service.cm;version=latest,\
-	org.eclipse.fennec.service.api;version=snapshot
+	org.eclipse.fennec.service.api;version=snapshot,\
+	org.eclipse.fennec.openapi.osgi;version=snapshot

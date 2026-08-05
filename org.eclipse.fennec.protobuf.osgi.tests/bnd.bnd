@@ -6,9 +6,14 @@ Bundle-Description: EMF Protobuf OSGi Integration Test
 	enableOSGi-Test,\
 	enableEMF
 
+# org.eclipse.fennec.protobuf.osgi is the bundle under test (see -runrequires in test.bndrun).
+# It is on the buildpath so bnd/Gradle know this project depends on it: without that edge
+# `resolve.test` can run before the .osgi jar is built (races under --parallel) and the
+# resolution fails on osgi.identity=org.eclipse.fennec.protobuf.osgi.
 -buildpath: \
 	org.osgi.framework;version=latest,\
 	org.eclipse.fennec.protobuf;version=snapshot,\
+	org.eclipse.fennec.protobuf.osgi;version=snapshot,\
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	com.google.protobuf;version=latest
 	
