@@ -28,6 +28,7 @@ src: src-gen,src
 Bundle-Version: 1.0.0.SNAPSHOT
 
 -buildpath: \
+	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	slf4j.api;version=latest,\
 	com.fasterxml.jackson.core.jackson-annotations;version=latest,\

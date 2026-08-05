@@ -1,7 +1,8 @@
 Bundle-Name: SensiNact Mapping Atlas Tests
-Bundle-Description: OSGi integration test for the Model Atlas mapping source: a mock \
- Model Atlas served over a local HttpServer delivers a ProviderMapping XMI and the \
- sensor-model EPackage, which end up in the sensinact mapping registry.
+Bundle-Description: OSGi integration test for the atlas-fed EObject registry pipeline: \
+ a mock Model Atlas served over a local HttpServer delivers ProviderMapping XMIs and \
+ the sensor-model EPackage; the atlas provider syncs them into a named EObject \
+ registry, whose listener face feeds the sensinact mapping facades.
 
 Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 
@@ -18,6 +19,7 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.osgi.util.promise;version=latest,\
 	org.eclipse.sensinact.gateway.core.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest,\
 	org.eclipse.fennec.sensinact.mapping;version=snapshot
 
 # Fixtures come straight from the sibling sensinact.mapping.tests bundle - the same

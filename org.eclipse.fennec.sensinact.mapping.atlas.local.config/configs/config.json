@@ -9,10 +9,23 @@
     "drift.check.interval.ms": 10000
   },
 
-  "org.eclipse.fennec.sensinact.mapping.atlas~jena": {
+  "FileEObjectProvider~mappings": {
+    "emf.eobject.provider.name": "mapping-files"
+  },
+
+  "EObjectRegistry~mappings": {
+    "name": "sensinact-mappings",
+    "initialProvider.target": "(emf.eobject.provider.name=mapping-files)"
+  },
+
+  "AtlasEObjectProvider~jena": {
     "atlasScope.target": "(atlas.scope=jena)",
+    "writer.target": "(emf.eobject.registry.name=sensinact-mappings)",
+    "emf.eobject.provider.name": "atlas-jena",
     "registries": ["sensinactmapping"],
-    "refresh.interval.ms": 60000    
+    "key.feature": "mid",
+    "required.nsuris": ["https://fennec.eclipse.org/sensinact/core/mapping/1.0"],
+    "refresh.interval.ms": 60000
   },
 
   "sensinact.session.manager": {

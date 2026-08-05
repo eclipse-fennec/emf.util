@@ -250,4 +250,13 @@ revised 2026-08-04 into a two-level shape:
   **no behavior or config change** — everything this plan built keeps working unchanged
   until the emf.osgi registry ships.
 
-Status: awaiting approval, not started.
+Status: **implemented 2026-08-05** — but not in the interim shape sketched above:
+emf.osgi shipped the registry first (issues #72–#77), so the interim service-publishing
+adapter was skipped entirely (generalization plan **Revision 5**). Final state: the
+engine lives in `org.eclipse.fennec.model.atlas.eobject.provider` as a **writer client**
+of the named registry `sensinact-mappings`, the facades are `EObjectRegistryListener`
+whiteboard services, and the `org.eclipse.fennec.sensinact.mapping.atlas` bundle (its
+factory PID and per-object services) is retired — the config shape changed to the
+three-config wiring, see the user guide. The Felix IT was rewritten accordingly
+(`AtlasRegistryIntegrationTest`); the live test against the jena atlas uses the migrated
+`local.config` configs.

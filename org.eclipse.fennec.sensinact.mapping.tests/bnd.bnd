@@ -28,6 +28,7 @@ src=${^src},src-gen
 	org.eclipse.sensinact.gateway.core.geo-json;version=latest,\
 	org.gecko.weather.model;version=latest,\
 	org.eclipse.fennec.sensinact.mapping;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest,\
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest
 
 -includeresource: \
