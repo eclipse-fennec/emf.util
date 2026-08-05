@@ -5,16 +5,3 @@
 	"No translation found for macro: fennec-baselining";is:=ignore,\
 	"No translation found for macro: maven-central";is:=ignore
 	
-# TEMPORARY local repository for testing unpublished Model Atlas client builds
-# (fingerprint support, branch model_fingerprint_support) ahead of the Maven
-# Central snapshot release. Paste the four client jars from
-# <model.atlas>/<bsn>/generated/<bsn>.jar into cnf/local/ (delete a stale
-# cnf/local/index.xml so it regenerates). The matching Central GAVs are
-# commented out in cnf/ext/central.mvn so these jars are not shadowed by the
-# older published snapshot. Remove this file, cnf/local/ and restore the
-# central.mvn entries once model.atlas has published the new snapshots.
--plugin.0.Local: \
-	aQute.bnd.deployer.repository.LocalIndexedRepo; \
-		name = Local; \
-		pretty = true; \
-		local = ${.}/local
