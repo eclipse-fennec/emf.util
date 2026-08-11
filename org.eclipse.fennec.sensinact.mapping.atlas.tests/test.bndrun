@@ -4,14 +4,16 @@
 -runsystempackages: com.sun.net.httpserver
 
 # The test bundle plus everything wired only by DS/config (capability resolution
-# alone would not pull it): the bridge, the atlas rest client, the JakartaRS client
-# runtime (ClientBuilder service), the fennec EMF runtime (default EPackage.Registry),
-# the sensinact gateway (ProviderMappingRegistry whiteboard) and ConfigAdmin.
+# alone would not pull it): the EObject registry + the atlas provider feeding it,
+# the atlas rest client, the JakartaRS client runtime (ClientBuilder service), the
+# fennec EMF runtime (default EPackage.Registry), the sensinact gateway (the mapping
+# facades' listener face) and ConfigAdmin.
 # The weather sensor model bundle is deliberately ABSENT - the test proves the
 # EPackage is fetched from the atlas.
 -runrequires: \
 	bnd.identity;id='org.eclipse.fennec.sensinact.mapping.atlas.tests',\
-	bnd.identity;id='org.eclipse.fennec.sensinact.mapping.atlas',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.eobject.registry',\
+	bnd.identity;id='org.eclipse.fennec.model.atlas.eobject.provider',\
 	bnd.identity;id='org.eclipse.fennec.model.atlas.rest.client.osgi',\
 	bnd.identity;id='org.eclipse.osgitech.rest',\
 	bnd.identity;id='org.eclipse.fennec.emf.osgi.component',\
@@ -53,13 +55,14 @@
 	org.eclipse.emf.ecore.xmi;version='[2.39.0,2.39.1)',\
 	org.eclipse.fennec.emf.gecko.compatibility.api;version='[1.1.0,1.1.1)',\
 	org.eclipse.fennec.emf.osgi.component;version='[1.1.0,1.1.1)',\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version='[1.1.0,1.1.1)',\
 	org.eclipse.fennec.emf.osgi.model.info;version='[1.1.0,1.1.1)',\
+	org.eclipse.fennec.model.atlas.eobject.provider;version=snapshot,\
 	org.eclipse.fennec.model.atlas.rest.client.api;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.model.atlas.rest.client.impl;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.model.atlas.rest.client.osgi;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.model.atlas.scope.api;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.sensinact.mapping;version=snapshot,\
-	org.eclipse.fennec.sensinact.mapping.atlas;version=snapshot,\
 	org.eclipse.fennec.sensinact.mapping.atlas.tests;version=snapshot,\
 	org.eclipse.osgitech.rest;version='[1.2.3,1.2.4)',\
 	org.eclipse.osgitech.rest.servlet.whiteboard;version='[1.2.3,1.2.4)',\

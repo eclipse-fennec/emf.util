@@ -36,12 +36,12 @@ public final class MockModelAtlasServer implements AutoCloseable {
 			  {"name":"mappings","type":"OTHER"},
 			  {"name":"schema","type":"SCHEMA"}
 			]}""";
-	private static final String MAPPING_LIST = "{\"metadata\":[{\"objectId\":\"dwd-weather\"},{\"objectId\":\"dwd-weather-reports\"}]}";
-
 	private final HttpServer server;
 	private final byte[] mappingXmi;
 	private final byte[] reportsMappingXmi;
 	private final byte[] weatherEcore;
+	/** Objects hidden from the listing and content - simulates deletion on the atlas. */
+	private final java.util.Set<String> hiddenObjects = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
 	public MockModelAtlasServer() throws IOException {
 		mappingXmi = readResource("/data/WeatherProviderMapping.xmi");
@@ -56,6 +56,24 @@ public final class MockModelAtlasServer implements AutoCloseable {
 		return "http://localhost:" + server.getAddress().getPort();
 	}
 
+	/** Removes an object from the atlas: gone from the listing, 404 on fetch. */
+	public void hideObject(String objectId) {
+		hiddenObjects.add(objectId);
+	}
+
+	private String mappingList() {
+		StringBuilder list = new StringBuilder("{\"metadata\":[");
+		for (String objectId : new String[] { "dwd-weather", "dwd-weather-reports" }) {
+			if (!hiddenObjects.contains(objectId)) {
+				if (list.charAt(list.length() - 1) == '}') {
+					list.append(',');
+				}
+				list.append("{\"objectId\":\"").append(objectId).append("\"}");
+			}
+		}
+		return list.append("]}").toString();
+	}
+
 	@Override
 	public void close() {
 		server.stop(0);
@@ -68,9 +86,14 @@ public final class MockModelAtlasServer implements AutoCloseable {
 		case "/scopes" -> respond(exchange, "application/json", SCOPE_LIST.getBytes(StandardCharsets.UTF_8));
 		case "/scopes/iot" -> respond(exchange, "application/json", SCOPE_INFO.getBytes(StandardCharsets.UTF_8));
 		case "/iot/registries/mappings" ->
-			respond(exchange, "application/json", MAPPING_LIST.getBytes(StandardCharsets.UTF_8));
+			respond(exchange, "application/json", mappingList().getBytes(StandardCharsets.UTF_8));
 		case "/iot/registries/mappings/content" -> {
-			switch (String.valueOf(queryParam(query, "objectId"))) {
+			String objectId = String.valueOf(queryParam(query, "objectId"));
+			if (hiddenObjects.contains(objectId)) {
+				respond(exchange, 404);
+				break;
+			}
+			switch (objectId) {
 			case "dwd-weather" -> respond(exchange, "application/xmi", mappingXmi);
 			case "dwd-weather-reports" -> respond(exchange, "application/xmi", reportsMappingXmi);
 			default -> respond(exchange, 404);

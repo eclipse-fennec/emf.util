@@ -12,6 +12,7 @@
  *     Data In Motion - initial API and implementation
  */
 /**
- * Model Atlas source for sensinact mappings - implementation only, not exported.
+ * DS factory component wrapping the atlas sync engine - implementation only, not
+ * exported.
  */
-package org.eclipse.fennec.sensinact.mapping.atlas.impl;
+package org.eclipse.fennec.model.atlas.eobject.provider.impl;

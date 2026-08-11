@@ -25,6 +25,7 @@ import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -35,8 +36,11 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
+import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistry;
+import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry;
 import org.eclipse.fennec.sensinact.mapping.InstancePusher;
 import org.eclipse.fennec.sensinact.mapping.ProviderMappingRegistry;
+import org.eclipse.fennec.sensinact.model.mapping.MappingPackage;
 import org.eclipse.fennec.sensinact.model.mapping.ProviderMapping;
 import org.eclipse.sensinact.core.command.AbstractSensinactCommand;
 import org.eclipse.sensinact.core.command.GatewayThread;
@@ -46,7 +50,6 @@ import org.eclipse.sensinact.core.twin.SensinactProvider;
 import org.eclipse.sensinact.core.twin.TimedValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.osgi.framework.ServiceReference;
 import org.osgi.service.cm.Configuration;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.config.InjectConfiguration;
@@ -59,19 +62,25 @@ import org.osgi.util.promise.Promise;
 import org.osgi.util.promise.PromiseFactory;
 
 /**
- * End-to-end: a factory config for the atlas rest client plus one for the mapping source
- * turn a mapping XMI served by the {@link MockModelAtlasServer} into a
- * {@link ProviderMapping} OSGi service, whose sensor-model EClass was itself fetched from
- * the atlas (the weather model bundle is deliberately absent from this runtime), and the
- * sensinact whiteboard registry picks it up.
+ * End-to-end over the emf.osgi EObject registry: a file provider (empty locations)
+ * gates the registry's publication, the atlas provider syncs the mapping XMIs served by
+ * the {@link MockModelAtlasServer} into it as a writer client, and the sensinact
+ * facades pick the entries up through their listener face. The sensor-model EClass is
+ * itself fetched from the atlas (the weather model bundle is deliberately absent from
+ * this runtime).
  */
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(ConfigurationExtension.class)
-public class AtlasMappingSourceIntegrationTest {
+public class AtlasRegistryIntegrationTest {
 
 	private static final String CLIENT_PID = "org.eclipse.fennec.model.atlas.rest.client";
-	private static final String SOURCE_PID = "org.eclipse.fennec.sensinact.mapping.atlas";
+	private static final String FILE_PROVIDER_PID = "FileEObjectProvider";
+	private static final String REGISTRY_PID = "EObjectRegistry";
+	private static final String ATLAS_PROVIDER_PID = "AtlasEObjectProvider";
+
+	private static final String REGISTRY_NAME = "sensinact-mappings";
+	private static final String REGISTRY_FILTER = "(emf.eobject.registry.name=" + REGISTRY_NAME + ")";
 
 	/**
 	 * The factory configs are injected untriggered ({@code @InjectConfiguration} without
@@ -86,44 +95,86 @@ public class AtlasMappingSourceIntegrationTest {
 		return props;
 	}
 
-	private static Dictionary<String, Object> sourceProps(String objectId) {
+	/** The registry's initial provider: no local files - a valid, empty initial state. */
+	private static Dictionary<String, Object> fileProviderProps() {
+		Hashtable<String, Object> props = new Hashtable<>();
+		props.put("emf.eobject.provider.name", "test-files");
+		return props;
+	}
+
+	private static Dictionary<String, Object> registryProps() {
+		Hashtable<String, Object> props = new Hashtable<>();
+		props.put("name", REGISTRY_NAME);
+		props.put("initialProvider.target", "(emf.eobject.provider.name=test-files)");
+		return props;
+	}
+
+	/**
+	 * The atlas provider as a writer client: keys entries by the mapping's {@code mid},
+	 * gates each pass on the generated mapping package (the fetched XMIs must not
+	 * materialize as dynamic EObjects while the model bundle's configurator has not run
+	 * yet), and pushes into the named registry. {@code refreshIntervalMs} 0 = sync once.
+	 */
+	private static Dictionary<String, Object> atlasProviderProps(long refreshIntervalMs, String... objectIds) {
 		Hashtable<String, Object> props = new Hashtable<>();
 		props.put("atlasScope.target", "(atlas.scope=iot)");
-		props.put("object.ids", new String[] { objectId });
+		props.put("writer.target", REGISTRY_FILTER);
+		props.put("emf.eobject.provider.name", "atlas-test");
+		props.put("registries", new String[] { "mappings" });
+		props.put("key.feature", "mid");
+		props.put("required.nsuris", new String[] { MappingPackage.eNS_URI });
+		props.put("retry.interval.ms", 500L);
+		if (refreshIntervalMs > 0) {
+			props.put("refresh.interval.ms", refreshIntervalMs);
+		}
+		if (objectIds.length > 0) {
+			props.put("object.ids", objectIds);
+		}
 		return props;
 	}
 
 	@Test
-	void mappingAndSensorModelFromAtlasReachTheRegistry(
+	void mappingAndSensorModelFromAtlasReachTheFacade(
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = FILE_PROVIDER_PID, name = "test", location = "?")) Configuration fileConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = REGISTRY_PID, name = "test", location = "?")) Configuration registryConfig,
 			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = CLIENT_PID, name = "test", location = "?")) Configuration clientConfig,
-			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = SOURCE_PID, name = "test", location = "?")) Configuration sourceConfig,
-			@InjectService(cardinality = 0) ServiceAware<ProviderMapping> mappingAware,
-			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> registryAware) throws Exception {
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = ATLAS_PROVIDER_PID, name = "test", location = "?")) Configuration atlasProviderConfig,
+			@InjectService(cardinality = 0, filter = REGISTRY_FILTER) ServiceAware<EObjectRegistry> registryAware,
+			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> facadeAware) throws Exception {
 		try (MockModelAtlasServer atlas = new MockModelAtlasServer()) {
+			fileConfig.update(fileProviderProps());
+			registryConfig.update(registryProps());
 			clientConfig.update(clientProps(atlas));
-			sourceConfig.update(sourceProps("dwd-weather"));
+			atlasProviderConfig.update(atlasProviderProps(0, "dwd-weather"));
 
-			ProviderMapping mapping = mappingAware.waitForService(30_000);
-			assertNotNull(mapping, "no ProviderMapping service appeared - atlas load failed");
+			// gated publication: the service appears once the (empty) initial load is done
+			EObjectRegistry registry = registryAware.waitForService(30_000);
+			assertNotNull(registry, "the EObjectRegistry service did not appear - gated publication failed");
+
+			EObjectRegistryEntry entry = waitFor(() -> registry.getEntry("dwd-weather").orElse(null),
+					Objects::nonNull, 30_000);
+			assertNotNull(entry, "no registry entry appeared - atlas sync failed");
+			assertEquals("atlas-test:mappings", entry.source(), "entries are scoped per atlas registry");
+			assertEquals(Boolean.TRUE, entry.properties().get("atlas.remote"));
+			assertEquals("iot", entry.properties().get("atlas.scope"));
+			assertEquals("mappings", entry.properties().get("atlas.registry"));
+			assertEquals("dwd-weather", entry.properties().get("atlas.object.id"));
+			assertEquals(MappingPackage.eNS_URI, entry.properties().get("emf.nsURI"));
+
+			// generated type, not a dynamic EObject - the required-nsURI gate held the pass
+			ProviderMapping mapping = (ProviderMapping) entry.object();
 			assertEquals("dwd-weather", mapping.getMid());
-
-			ServiceReference<ProviderMapping> reference = mappingAware.getServiceReference();
-			assertEquals(Boolean.TRUE, reference.getProperty("atlas.remote"));
-			assertEquals("iot", reference.getProperty("atlas.scope"));
-			assertEquals("mappings", reference.getProperty("atlas.registry"));
-			assertEquals("dwd-weather", reference.getProperty("atlas.object.id"));
-			assertEquals("dwd-weather", reference.getProperty("sensinact.mapping.mid"));
 
 			EClass providerClass = mapping.getProviderClasses().get(0);
 			assertFalse(providerClass.eIsProxy(), "provider class proxy did not resolve against the atlas");
 			assertEquals("MOSMIXSWeatherReport", providerClass.getName());
 			assertEquals("http://cdc.dwd.de/common/weather", providerClass.getEPackage().getNsURI());
 
-			ProviderMappingRegistry registry = registryAware.waitForService(30_000);
-			assertNotNull(registry);
-			List<ProviderMapping> registered = waitFor(() -> registry.getProviderMapping(providerClass),
+			ProviderMappingRegistry facade = facadeAware.waitForService(30_000);
+			assertNotNull(facade);
+			List<ProviderMapping> registered = waitFor(() -> facade.getProviderMapping(providerClass),
 					list -> list != null && !list.isEmpty(), 10_000);
-			assertNotNull(registered, "the whiteboard did not deliver the mapping to the registry");
+			assertNotNull(registered, "the listener face did not deliver the mapping to the facade");
 			assertTrue(registered.contains(mapping));
 		}
 	}
@@ -136,30 +187,36 @@ public class AtlasMappingSourceIntegrationTest {
 	 */
 	@Test
 	void pushedInstanceReachesTheTwinThroughAtlasMapping(
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = FILE_PROVIDER_PID, name = "test", location = "?")) Configuration fileConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = REGISTRY_PID, name = "test", location = "?")) Configuration registryConfig,
 			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = CLIENT_PID, name = "test", location = "?")) Configuration clientConfig,
-			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = SOURCE_PID, name = "test", location = "?")) Configuration sourceConfig,
-			@InjectService(cardinality = 0) ServiceAware<ProviderMapping> mappingAware,
-			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> registryAware,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = ATLAS_PROVIDER_PID, name = "test", location = "?")) Configuration atlasProviderConfig,
+			@InjectService(cardinality = 0, filter = REGISTRY_FILTER) ServiceAware<EObjectRegistry> registryAware,
+			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> facadeAware,
 			@InjectService(cardinality = 0) ServiceAware<InstancePusher> pusherAware,
 			@InjectService(cardinality = 0) ServiceAware<GatewayThread> gatewayAware) throws Exception {
 		try (MockModelAtlasServer atlas = new MockModelAtlasServer()) {
+			fileConfig.update(fileProviderProps());
+			registryConfig.update(registryProps());
 			clientConfig.update(clientProps(atlas));
-			sourceConfig.update(sourceProps("dwd-weather-reports"));
+			atlasProviderConfig.update(atlasProviderProps(0, "dwd-weather-reports"));
 
-			ProviderMapping mapping = mappingAware.waitForService(30_000);
-			assertNotNull(mapping, "no ProviderMapping service appeared - atlas load failed");
-			assertEquals("dwd-weather-reports", mapping.getMid());
+			EObjectRegistry registry = registryAware.waitForService(30_000);
+			EObjectRegistryEntry entry = waitFor(() -> registry.getEntry("dwd-weather-reports").orElse(null),
+					Objects::nonNull, 30_000);
+			assertNotNull(entry, "no registry entry appeared - atlas sync failed");
+			ProviderMapping mapping = (ProviderMapping) entry.object();
 
 			EClass providerClass = mapping.getProviderClasses().get(0);
 			assertEquals("WeatherReports", providerClass.getName());
 
-			ProviderMappingRegistry registry = registryAware.waitForService(30_000);
-			List<ProviderMapping> registered = waitFor(() -> registry.getProviderMapping(providerClass),
+			ProviderMappingRegistry facade = facadeAware.waitForService(30_000);
+			List<ProviderMapping> registered = waitFor(() -> facade.getProviderMapping(providerClass),
 					list -> list != null && !list.isEmpty(), 10_000);
-			assertNotNull(registered, "the whiteboard did not deliver the mapping to the registry");
+			assertNotNull(registered, "the listener face did not deliver the mapping to the facade");
 
 			// Instance built from the SAME (atlas-fetched, dynamic) EPackage the mapping
-			// resolved against - EClass identity is what the registry lookup keys on
+			// resolved against - EClass identity is what the facade lookup keys on
 			EObject weatherReports = createWeatherReports(providerClass.getEPackage());
 
 			InstancePusher pusher = pusherAware.waitForService(30_000);
@@ -202,11 +259,13 @@ public class AtlasMappingSourceIntegrationTest {
 	 */
 	@Test
 	void xmiPayloadResolvesModelThroughAtlasAndReachesTheTwin(
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = FILE_PROVIDER_PID, name = "test", location = "?")) Configuration fileConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = REGISTRY_PID, name = "test", location = "?")) Configuration registryConfig,
 			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = CLIENT_PID, name = "test", location = "?")) Configuration clientConfig,
-			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = SOURCE_PID, name = "test", location = "?")) Configuration sourceConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = ATLAS_PROVIDER_PID, name = "test", location = "?")) Configuration atlasProviderConfig,
 			@InjectService(timeout = 5000) ResourceSetFactory resourceSetFactory,
-			@InjectService(cardinality = 0) ServiceAware<ProviderMapping> mappingAware,
-			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> registryAware,
+			@InjectService(cardinality = 0, filter = REGISTRY_FILTER) ServiceAware<EObjectRegistry> registryAware,
+			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> facadeAware,
 			@InjectService(cardinality = 0) ServiceAware<InstancePusher> pusherAware,
 			@InjectService(cardinality = 0) ServiceAware<GatewayThread> gatewayAware) throws Exception {
 
@@ -215,11 +274,14 @@ public class AtlasMappingSourceIntegrationTest {
 				"a payload of an unknown model must not deserialize");
 
 		try (MockModelAtlasServer atlas = new MockModelAtlasServer()) {
+			fileConfig.update(fileProviderProps());
+			registryConfig.update(registryProps());
 			clientConfig.update(clientProps(atlas));
-			sourceConfig.update(sourceProps("dwd-weather-reports"));
+			atlasProviderConfig.update(atlasProviderProps(0, "dwd-weather-reports"));
 
-			assertNotNull(mappingAware.waitForService(30_000),
-					"no ProviderMapping service appeared - atlas load failed");
+			EObjectRegistry registry = registryAware.waitForService(30_000);
+			assertNotNull(waitFor(() -> registry.getEntry("dwd-weather-reports").orElse(null), Objects::nonNull,
+					30_000), "no registry entry appeared - atlas sync failed");
 			InstancePusher pusher = pusherAware.waitForService(30_000);
 
 			// Phase 2: weather model resolves via the atlas; retry while the client warms up.
@@ -231,14 +293,14 @@ public class AtlasMappingSourceIntegrationTest {
 			assertNotNull(roots, "weather payload did not deserialize - atlas package resolution failed; last: "
 					+ lastLoadFailure.get());
 
-			// Wait until the whiteboard delivered the mapping to the registry, keyed by the
+			// Wait until the listener face delivered the mapping to the facade, keyed by the
 			// payload's OWN EClass - this is also the EClass-identity proof: the payload's
 			// package (published via the lazy registry) and the mapping's providerClasses
 			// (resolved by the client) must be the same instance
 			EObject weatherReports = roots.get(0);
-			ProviderMappingRegistry registry = registryAware.waitForService(30_000);
+			ProviderMappingRegistry facade = facadeAware.waitForService(30_000);
 			List<ProviderMapping> registered = waitFor(
-					() -> registry.getProviderMapping(weatherReports.eClass()),
+					() -> facade.getProviderMapping(weatherReports.eClass()),
 					list -> list != null && !list.isEmpty(), 10_000);
 			assertNotNull(registered, "no mapping registered under the payload's EClass - "
 					+ "EClass identity between payload package and mapping package is broken");
@@ -270,6 +332,49 @@ public class AtlasMappingSourceIntegrationTest {
 				}
 			});
 			assertTrue(verified.getValue(), "twin verification should succeed");
+		}
+	}
+
+	/**
+	 * The source-loss case: an object deleted on the atlas disappears from the registry
+	 * (and the facade) on the next refresh pass - via the writer's per-source sync - while
+	 * the other entries of the same source stay untouched.
+	 */
+	@Test
+	void refreshRemovesObjectsGoneFromTheAtlas(
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = FILE_PROVIDER_PID, name = "test", location = "?")) Configuration fileConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = REGISTRY_PID, name = "test", location = "?")) Configuration registryConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = CLIENT_PID, name = "test", location = "?")) Configuration clientConfig,
+			@InjectConfiguration(withFactoryConfig = @WithFactoryConfiguration(factoryPid = ATLAS_PROVIDER_PID, name = "test", location = "?")) Configuration atlasProviderConfig,
+			@InjectService(cardinality = 0, filter = REGISTRY_FILTER) ServiceAware<EObjectRegistry> registryAware,
+			@InjectService(cardinality = 0) ServiceAware<ProviderMappingRegistry> facadeAware) throws Exception {
+		try (MockModelAtlasServer atlas = new MockModelAtlasServer()) {
+			fileConfig.update(fileProviderProps());
+			registryConfig.update(registryProps());
+			clientConfig.update(clientProps(atlas));
+			// list mode (no explicit object ids) - removal must be detected from the listing
+			atlasProviderConfig.update(atlasProviderProps(1_000));
+
+			EObjectRegistry registry = registryAware.waitForService(30_000);
+			EObjectRegistryEntry entry = waitFor(() -> registry.getEntry("dwd-weather").orElse(null),
+					Objects::nonNull, 30_000);
+			assertNotNull(entry, "no registry entry appeared - atlas sync failed");
+			assertNotNull(waitFor(() -> registry.getEntry("dwd-weather-reports").orElse(null), Objects::nonNull,
+					30_000));
+			EClass providerClass = ((ProviderMapping) entry.object()).getProviderClasses().get(0);
+
+			ProviderMappingRegistry facade = facadeAware.waitForService(30_000);
+			assertNotNull(waitFor(() -> facade.getProviderMapping(providerClass),
+					list -> list != null && !list.isEmpty(), 10_000));
+
+			// the object disappears from the atlas - the next complete pass syncs the remainder
+			atlas.hideObject("dwd-weather");
+			assertNotNull(waitFor(() -> registry.getEntry("dwd-weather").isEmpty() ? Boolean.TRUE : null,
+					Objects::nonNull, 15_000), "the gone object was not removed from the registry");
+			assertNotNull(waitFor(() -> facade.getProviderMapping(providerClass).isEmpty() ? Boolean.TRUE : null,
+					Objects::nonNull, 10_000), "the gone mapping was not dropped by the facade");
+			assertTrue(registry.getEntry("dwd-weather-reports").isPresent(),
+					"other entries of the same source must stay untouched");
 		}
 	}
 

@@ -570,12 +570,20 @@ duration datatype, so these serialize as plain XMI attributes.
 The engine is plain Java (`ValueMapper` / `ValueMapperFactory`), but the normal deployment
 is service-driven:
 
-- Register each `ProviderMapping` as an OSGi service. `ProviderMappingRegistryImpl` is a
-  whiteboard `@Component` (config pid `sensinact.southbound.emf.mapping`) that collects them,
-  keyed by `providerClasses`, and builds the provider model in the twin on the SensiNact
-  `GatewayThread`.
-- Register `MappingProfile` services; `MappingProfileRegistryImpl` collects them by
-  `profileId` and validates conformance.
+- Put each `ProviderMapping` into the named EObject registry **`sensinact-mappings`**
+  (emf.osgi `org.eclipse.fennec.emf.osgi.eobject.registry`; entry keys = the mapping's
+  `mid`). `ProviderMappingRegistryImpl` (config pid `sensinact.southbound.emf.mapping`)
+  is an `EObjectRegistryListener` whiteboard service on that registry: the registry
+  replays the current content when it binds, the facade validates every entry (`mid`
+  present, provider classes resolved — invalid entries are skipped with a log,
+  uniformly for every content source), indexes it by `providerClasses` and builds the
+  provider model in the twin on the SensiNact `GatewayThread`. Content reaches the
+  registry through its providers — local files via emf.osgi's `FileEObjectProvider`
+  (the registry's initial provider), a Model Atlas via the atlas provider below — or
+  programmatically via `registerModelMapping`.
+- `MappingProfile`s flow the same way through the registry **`sensinact-profiles`**
+  (entry keys = `profileId`) into `MappingProfileRegistryImpl`, which validates
+  conformance.
 - Feed data in through the **`InstancePusher`** service: `pushInstance(EObject)` looks up
   all registered mappings for the instance's EClass and applies each on the gateway thread,
   returning the number of mappings applied (`0` = nothing registered for that EClass;
@@ -604,16 +612,21 @@ Map<String,Object> values = mapper.mapResourceValues(sourceInstance);  // inspec
 
 Instead of shipping mapping XMIs inside a bundle, they (and the sensor-model EPackages they
 reference) can be pulled from a remote [Model Atlas](https://github.com/eclipse-fennec/model.atlas).
-Two pieces cooperate:
+Three pieces cooperate — none of them sensinact-specific:
 
 - the **atlas rest client** (`org.eclipse.fennec.model.atlas.rest.client.osgi`): one factory
   config per atlas instance; it publishes a `ReadableScopeService<EObject>` per scope (service
   property `atlas.scope`) and remote EPackages on demand (fetch-on-miss, so `href`s from a
   mapping XMI into a sensor model resolve without the sensor-model bundle being deployed);
-- the **mapping source** (`org.eclipse.fennec.sensinact.mapping.atlas`, this repo): one factory
-  config per scope; it reads `ProviderMapping`/`MappingProfile` objects from the configured
-  atlas registries and registers each as an OSGi service — from there the whiteboards above
-  take over as if the mapping had been registered locally.
+- the **EObject registry** (`org.eclipse.fennec.emf.osgi.eobject.registry`, from emf.osgi):
+  one factory config per content domain; the registry services only appear after the
+  configured *initial provider* — normally emf.osgi's `FileEObjectProvider` — completed its
+  load, so consumers never observe a half-loaded registry. Authoritative documentation:
+  the emf.osgi *EObject registry guide* (`docs/eobject-registry-guide.md` there);
+- the **atlas provider** (`org.eclipse.fennec.model.atlas.eobject.provider`, this repo): one
+  factory config per scope; a *writer client* that syncs `ProviderMapping`/`MappingProfile`
+  objects from the configured atlas registries into the named registry — from there the
+  facades' listener face takes over as if the mapping had been deployed locally.
 
 ```json
 {
@@ -621,37 +634,81 @@ Two pieces cooperate:
     "base.uri": "http://atlas-host:8080/atlas/rest",
     "scope.allow.list": ["iot"]
   },
-  "org.eclipse.fennec.sensinact.mapping.atlas~iot": {
-    "atlasScope.target": "(atlas.scope=iot)"
+  "FileEObjectProvider~mappings": {
+    "emf.eobject.provider.name": "mapping-files",
+    "locations": ["/opt/app/mappings"],
+    "key.feature": "mid"
+  },
+  "EObjectRegistry~mappings": {
+    "name": "sensinact-mappings",
+    "initialProvider.target": "(emf.eobject.provider.name=mapping-files)"
+  },
+  "AtlasEObjectProvider~iot": {
+    "atlasScope.target": "(atlas.scope=iot)",
+    "writer.target": "(emf.eobject.registry.name=sensinact-mappings)",
+    "emf.eobject.provider.name": "atlas-iot",
+    "registries": ["mappings"],
+    "key.feature": "mid",
+    "required.nsuris": ["https://fennec.eclipse.org/sensinact/core/mapping/1.0"],
+    "refresh.interval.ms": 60000
   }
 }
 ```
 
-Mapping-source configuration (factory PID `org.eclipse.fennec.sensinact.mapping.atlas`):
+`locations` may be empty or absent — no local mapping files is a valid, empty initial
+state (the file provider then only gates the registry's publication). Profiles get their
+own trio on a registry `sensinact-profiles` with `key.feature=profileId`.
+
+**Migrating from the earlier single-config shape.** Up to 2026-08 one factory config for
+PID `org.eclipse.fennec.sensinact.mapping.atlas` did the whole job and published each
+mapping as an OSGi service. That bundle and its PID are **retired**; replace each of its
+configs with the registry trio above. The atlas rest-client config is unchanged, and
+`atlasScope.target`, `registries` and `refresh.interval.ms` carry over verbatim into the
+`AtlasEObjectProvider` config — what is new is `writer.target` (which registry to feed),
+`emf.eobject.provider.name` (the source tag), `key.feature` (`mid` / `profileId`, so
+entries are keyed by the domain id rather than the atlas object id) and `required.nsuris`
+(the mapping metamodel gate, previously compiled into the component). The
+`ProviderMappingRegistry` / `MappingProfileRegistry` / `InstancePusher` APIs are
+unchanged, so nothing on the consumer side moves.
+
+Atlas-provider configuration (factory PID `AtlasEObjectProvider`):
 
 | Property | Default | Meaning |
 |---|---|---|
 | `atlasScope.target` | — | DS target filter selecting the scope service, e.g. `(atlas.scope=iot)` (add `(atlas.stage=…)` to pin a stage-published client) |
-| `registries` | `["mappings"]` | atlas registry name(s) to read objects from |
-| `object.ids` | `[]` | explicit allowlist; empty loads everything the registries list |
+| `writer.target` | — | DS target filter selecting the target registry by name, e.g. `(emf.eobject.registry.name=sensinact-mappings)` |
+| `emf.eobject.provider.name` | — | this provider's source name; entries are written under the source tag `<name>:<atlas-registry>` |
+| `registries` | — | atlas registry name(s) to sync objects from |
+| `object.ids` | `[]` | explicit allowlist; empty syncs everything the registries list |
 | `stage` | `""` | explicit atlas stage to read; empty reads the final stage |
-| `refresh.interval.ms` | `0` | periodic re-fetch; changed objects are re-registered (whiteboards see remove+add), removed ids unregistered. `0` = load once on activation |
-| `retry.interval.ms` | `30000` | back-off while the initial load is incomplete (atlas unreachable, object missing) |
+| `key.feature` | `""` | attribute of the fetched objects whose value becomes the entry key (sensinact: `mid` / `profileId`); empty keys by the atlas object id |
+| `required.nsuris` | `[]` | nsURIs whose generated `EPackage`s must be resolvable before a sync pass runs (see the metamodel note below) |
+| `refresh.interval.ms` | `0` | periodic re-sync; changed objects update their entry, removed ids are dropped via the writer's per-source `sync`. `0` = sync once on activation |
+| `retry.interval.ms` | `30000` | back-off while the initial sync is incomplete (atlas unreachable, object missing) |
 
-Registered services carry `sensinact.mapping.mid` (or `sensinact.mapping.profile.id`),
-`atlas.remote=true`, `atlas.scope`, `atlas.registry`, `atlas.object.id` and, when configured,
-`atlas.stage` — so atlas-sourced mappings can be told apart from locally deployed ones.
+Registry entries carry `atlas.remote=true`, `atlas.scope`, `atlas.registry`,
+`atlas.object.id`, `emf.nsURI` and, when configured, `atlas.stage` as **entry
+properties**, and their `source` is the tag `<provider>:<atlas-registry>` — so
+atlas-sourced mappings can be told apart from file-provided ones (whose entries carry
+`file.location`).
 
 Notes:
 
 - **The mapping metamodel stays local.** The atlas client resolves nsURIs local-first against
-  the global `EPackage.Registry`; the source pins the generated mapping package there before
-  the first fetch, so fetched objects are real `ProviderMapping` instances (not dynamic
-  EObjects). Sensor models, by contrast, may live only in the atlas.
-- All atlas I/O happens on a private thread — activation never blocks, per-object failures are
-  logged and skipped, and a transient outage during refresh keeps the current registrations.
-- If the atlas client config goes away, the source deactivates and all its mapping services
-  vanish; when it returns, everything reloads.
+  the global `EPackage.Registry`. List the metamodel's nsURI in `required.nsuris`: a sync
+  pass only runs once the generated package is registered (and the provider re-pins it per
+  pass afterwards), so fetched objects are real `ProviderMapping` instances — otherwise they
+  would materialize as dynamic EObjects and the facade's type check would skip them
+  silently. Sensor models, by contrast, may live only in the atlas.
+- All atlas I/O happens on a private thread — activation never blocks. A transient outage
+  keeps the current entries: a partial pass pushes only the successfully fetched objects and
+  removes **nothing**; only a complete pass removes objects definitively gone from the
+  atlas (the writer's per-source `sync` — entries of other sources, e.g. the file provider's,
+  are never touched). Unchanged objects are end-to-end no-ops: the client's ETag cache
+  returns the identical instance, which the writer's identity compare swallows event-free.
+- If the atlas client config goes away, the provider deactivates and its entries **stay in
+  the registry** — an unreachable or removed source never costs the locally held content;
+  when it returns, the next sync pass reconciles.
 - **Sensor-model drift:** the atlas client's periodic drift check (`drift.check.interval.ms`
   on the rest-client config) also watches EPackages that were resolved fetch-on-miss, so a
   sensor model changed or removed on the atlas is detected in a running gateway. Requires
@@ -673,9 +730,11 @@ Notes:
   EClass identity between such payloads and atlas-loaded mappings is guaranteed by the
   client's ETag/304 revalidation (a `304` returns the cached `EPackage` instance).
 - End-to-end example (mock atlas over HTTP, sensor EPackage *not* deployed):
-  `org.eclipse.fennec.sensinact.mapping.atlas.tests` — including the full raw-data path:
-  XMI payload → fresh `ResourceSet` (model resolved through the atlas) → `InstancePusher`
-  → twin values, plus the unknown-model case.
+  `org.eclipse.fennec.sensinact.mapping.atlas.tests` (`AtlasRegistryIntegrationTest`) —
+  gated registry publication, atlas sync into the registry, facade pickup, the full
+  raw-data path (XMI payload → fresh `ResourceSet` with the model resolved through the
+  atlas → `InstancePusher` → twin values), the unknown-model case, and the source-loss
+  case (object deleted on the atlas disappears from registry and facade on refresh).
 - Live smoke test: `org.eclipse.fennec.sensinact.mapping.atlas.test.component`
   (`WeatherReportsSimulator`, config PID `sensinact.mapping.atlas.test.simulator`)
   periodically renders a `WeatherReports` **XMI payload** (as an external device would

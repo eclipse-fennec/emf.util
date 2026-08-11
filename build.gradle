@@ -66,6 +66,7 @@ subprojects {
             'org.eclipse.fennec.soap.client',
             'org.eclipse.fennec.openapi.ecore',
             'org.eclipse.fennec.openapi.client',
+            'org.eclipse.fennec.model.atlas.eobject.provider',
     ]
     afterEvaluate {
         if (project.name in coverageFloorBundles) {

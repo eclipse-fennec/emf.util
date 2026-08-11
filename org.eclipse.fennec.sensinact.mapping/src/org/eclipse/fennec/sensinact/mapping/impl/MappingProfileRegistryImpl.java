@@ -22,6 +22,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryConstants;
+import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry;
+import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryListener;
 import org.eclipse.fennec.sensinact.mapping.MappingProfileRegistry;
 import org.eclipse.fennec.sensinact.model.mapping.MappingProfile;
 import org.eclipse.fennec.sensinact.model.mapping.ProfileAdmin;
@@ -33,32 +36,78 @@ import org.eclipse.fennec.sensinact.model.mapping.ResourceMapping;
 import org.eclipse.fennec.sensinact.model.mapping.ServiceMapping;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
-import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * OSGi service implementation for managing mapping profiles.
- * 
+ * OSGi service implementation for managing mapping profiles. Collects
+ * {@link MappingProfile}s from the named EObject registry {@code sensinact-profiles}
+ * (override via the {@code emf.eobject.registry.name} component property): published as
+ * an {@link EObjectRegistryListener} whiteboard service, the registry binds it and
+ * replays the current content. Non-MappingProfile content or a missing profileId skips
+ * the entry with a log; the programmatic {@link #registerProfile(MappingProfile)} API is
+ * unchanged.
+ *
  * @author Mark Hoffmann
  * @since 15.07.2025
  */
-@Component(immediate = true, service = MappingProfileRegistry.class)
-public class MappingProfileRegistryImpl implements MappingProfileRegistry {
+@Component(immediate = true, service = { MappingProfileRegistry.class, EObjectRegistryListener.class }, //
+        property = EObjectRegistryConstants.EMF_EOBJECT_REGISTRY_NAME + "=sensinact-profiles")
+public class MappingProfileRegistryImpl implements MappingProfileRegistry, EObjectRegistryListener {
+
+    private static final Logger logger = LoggerFactory.getLogger(MappingProfileRegistryImpl.class);
 
     private final Map<String, MappingProfile> profiles = new ConcurrentHashMap<>();
 
-    @Reference(cardinality = ReferenceCardinality.MULTIPLE, policy = ReferencePolicy.DYNAMIC)
-    public void addProfile(MappingProfile profile) {
-        requireNonNull(profile);
-        requireNonNull(profile.getProfileId());
-        profiles.put(profile.getProfileId(), profile);
+    /*
+     * (non-Javadoc)
+     * @see org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryListener#entryAdded(org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry)
+     */
+    @Override
+    public void entryAdded(EObjectRegistryEntry entry) {
+        validProfile(entry, false).ifPresent(profile -> profiles.put(profile.getProfileId(), profile));
     }
 
-    public void removeProfile(MappingProfile profile) {
-        if (profile != null && profile.getProfileId() != null) {
-            profiles.remove(profile.getProfileId());
+    /*
+     * (non-Javadoc)
+     * @see org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryListener#entryUpdated(org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry, org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry)
+     */
+    @Override
+    public void entryUpdated(EObjectRegistryEntry entry, EObjectRegistryEntry oldEntry) {
+        // index the new profile before dropping the old one, so lookups never see a gap
+        validProfile(entry, false).ifPresent(profile -> profiles.put(profile.getProfileId(), profile));
+        validProfile(oldEntry, true).ifPresent(old -> profiles.remove(old.getProfileId(), old));
+    }
+
+    /*
+     * (non-Javadoc)
+     * @see org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryListener#entryRemoved(org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry)
+     */
+    @Override
+    public void entryRemoved(EObjectRegistryEntry entry) {
+        validProfile(entry, true).ifPresent(profile -> profiles.remove(profile.getProfileId(), profile));
+    }
+
+    /**
+     * Validation of registry content, applied uniformly to every source. Quiet mode is
+     * used for old/removed entries: an entry that never passed validation was never
+     * indexed, so its removal must not log again.
+     */
+    private Optional<MappingProfile> validProfile(EObjectRegistryEntry entry, boolean quiet) {
+        if (!(entry.object() instanceof MappingProfile profile)) {
+            if (!quiet) {
+                logger.warn("Registry entry '{}' is a {} - expected MappingProfile, skipping", entry.key(),
+                        entry.object().eClass().getName());
+            }
+            return Optional.empty();
         }
+        if (profile.getProfileId() == null || profile.getProfileId().isBlank()) {
+            if (!quiet) {
+                logger.error("MappingProfile '{}' has no profileId - skipping", entry.key());
+            }
+            return Optional.empty();
+        }
+        return Optional.of(profile);
     }
 
     @Override
