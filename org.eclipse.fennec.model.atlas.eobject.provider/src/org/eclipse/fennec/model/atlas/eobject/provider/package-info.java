@@ -20,6 +20,10 @@
  * one {@code sync} per atlas registry, keyed per domain convention, resilient against
  * the atlas being unavailable. The OSGi layer is a config-driven DS factory component
  * (component name {@code AtlasEObjectProvider}) on top.
+ *
+ * @deprecated Moved to the {@code eclipse-fennec/event.atlas} repository (same BSN and
+ * packages, Maven group {@code org.eclipse.fennec.event.atlas}). This copy is frozen;
+ * see the project README.
  */
 @org.osgi.annotation.bundle.Export
 @org.osgi.annotation.versioning.Version("1.0.0")

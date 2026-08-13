@@ -58,7 +58,9 @@ resolved closure of those bundles. Two consequences worth knowing:
   A runtime that actually maps into a digital twin has to supply the gateway itself
   (`org.eclipse.sensinact.gateway.core.*`, e.g. from the sensinact distribution).
 - **Not every bundle in the repo is in the library** — the Model Atlas EObject provider
-  (`org.eclipse.fennec.model.atlas.eobject.provider`) and the SOAP client
+  (`org.eclipse.fennec.model.atlas.eobject.provider`, **deprecated here: moved to the
+  [event.atlas](https://github.com/eclipse-fennec/event.atlas) repository**, Maven group
+  `org.eclipse.fennec.event.atlas`) and the SOAP client
   (`org.eclipse.fennec.soap.client`) are not required by it, so `-library: fennecUtil`
   alone will not resolve them; index those artifacts explicitly in your own
   `central.mvn` when you need them.
