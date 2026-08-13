@@ -30,6 +30,13 @@
 
 # Resolved closure (regenerate via `gradlew :org.eclipse.fennec.sensinact.mapping.atlas.tests:resolve.test`).
 # Committed so the bndrun is launchable from bndtools and reproducible in CI.
+
+# The spifly framework-extension variant breaks the typedevent bus at startup
+# ("Weaving hook failed"), which keeps the sensinact GatewayThread from activating.
+# Force the resolver onto the classic spifly dynamic bundle instead.
+-runblacklist: \
+	bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension'
+
 -runbundles: \
 	com.fasterxml.jackson.core.jackson-annotations;version='[2.21.0,2.21.1)',\
 	io.dropwizard.metrics.core;version='[4.2.37,4.2.38)',\
