@@ -11,5 +11,10 @@
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
+/**
+ * @deprecated Moved to the {@code eclipse-fennec/event.atlas} repository as
+ * {@code org.eclipse.fennec.event.atlas.mapping} (Maven group
+ * {@code org.eclipse.fennec.event.atlas}). This copy is frozen; see the project README.
+ */
 @org.osgi.annotation.bundle.Export
 package org.eclipse.fennec.sensinact.mapping;

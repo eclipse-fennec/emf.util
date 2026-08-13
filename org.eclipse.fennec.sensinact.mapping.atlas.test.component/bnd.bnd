@@ -1,5 +1,6 @@
-Bundle-Name: SensiNact Mapping Atlas - Live Test Simulator
-Bundle-Description: Test-only southbound simulator: periodically renders a WeatherReports \
+Bundle-Name: SensiNact Mapping Atlas - Live Test Simulator (deprecated, moved to event.atlas)
+Bundle-Description: DEPRECATED - moved to the eclipse-fennec/event.atlas repository, this copy is frozen (see README.md). \
+ Test-only southbound simulator: periodically renders a WeatherReports \
  XMI payload (like an external device would send it), loads it through the runtime \
  ResourceSet (nsURI resolution local-first, then atlas fetch-on-miss) and pushes the \
  resulting EObjects into sensinact via the InstancePusher. If the model is unknown the \

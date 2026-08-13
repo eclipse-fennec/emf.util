@@ -57,6 +57,10 @@ resolved closure of those bundles. Two consequences worth knowing:
   mapping bundle without dragging the SensiNact gateway bundles into every workspace.
   A runtime that actually maps into a digital twin has to supply the gateway itself
   (`org.eclipse.sensinact.gateway.core.*`, e.g. from the sensinact distribution).
+  **Deprecated:** the mapping bundle moved to the
+  [event.atlas](https://github.com/eclipse-fennec/event.atlas) repository as
+  `org.eclipse.fennec.event.atlas.mapping` (Maven group `org.eclipse.fennec.event.atlas`);
+  it will be dropped from this library when the frozen copy is removed.
 - **Not every bundle in the repo is in the library** — the Model Atlas EObject provider
   (`org.eclipse.fennec.model.atlas.eobject.provider`, **deprecated here: moved to the
   [event.atlas](https://github.com/eclipse-fennec/event.atlas) repository**, Maven group

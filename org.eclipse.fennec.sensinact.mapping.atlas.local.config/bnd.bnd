@@ -1,3 +1,7 @@
+Bundle-Name: SensiNact Mapping Atlas Local Config (deprecated, moved to event.atlas)
+Bundle-Description: DEPRECATED - moved to the eclipse-fennec/event.atlas repository, \
+ this copy is frozen (see README.md).
+
 -resourceonly: true
 -includeresource: OSGI-INF/configurator/=configs/
 Require-Capability: \
