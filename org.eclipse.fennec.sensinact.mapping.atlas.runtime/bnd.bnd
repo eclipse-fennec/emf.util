@@ -1,3 +1,7 @@
+Bundle-Name: SensiNact Mapping Atlas Runtime (deprecated, moved to event.atlas)
+Bundle-Description: DEPRECATED - moved to the eclipse-fennec/event.atlas repository, \
+ this copy is frozen (see README.md).
+
 -buildpath: \
 	osgi.annotation; version=6.0.1,\
 	osgi.core; version=6.0,\

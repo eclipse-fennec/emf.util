@@ -1,5 +1,13 @@
 # SensiNact mapping
 
+> **⚠️ Deprecated — moved to
+> [event.atlas](https://github.com/eclipse-fennec/event.atlas).** The mapping engine and
+> all `sensinact.mapping*` projects live there now (bundle
+> `org.eclipse.fennec.event.atlas.mapping`, nsURI
+> `https://fennec.eclipse.org/event.atlas/mapping/1.0`); the maintained version of this
+> guide is event.atlas's `docs/sensinact-mapping-user-guide.md`. This copy is frozen and
+> will be removed together with the projects.
+
 > **Status: in development.** The core mapping engine and its OSGi integration are
 > implemented and tested; the metamodel and options described here may still evolve.
 

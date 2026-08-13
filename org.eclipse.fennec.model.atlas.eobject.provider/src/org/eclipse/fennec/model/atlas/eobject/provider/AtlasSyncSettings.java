@@ -41,7 +41,12 @@ import java.util.Set;
  * @param threadName        name of the private sync thread; {@code null} or blank
  *                          derives {@code atlas-eobject-provider-<providerName>}
  * @since 08/2026
+  *
+ * @deprecated Moved to the {@code eclipse-fennec/event.atlas} repository (same BSN
+ * and packages, Maven group {@code org.eclipse.fennec.event.atlas}). This copy is
+ * frozen; see the project README.
  */
+@Deprecated
 public record AtlasSyncSettings(String providerName, List<String> registries, List<String> objectIds, String stage,
 		Set<String> requiredNsUris, long refreshIntervalMs, long retryIntervalMs, String threadName) {
 
