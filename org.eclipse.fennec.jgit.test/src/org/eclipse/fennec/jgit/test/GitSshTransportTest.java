@@ -1,6 +1,6 @@
-/**
- * Copyright (c) 2012 - 2026 Data In Motion and others.
- * All rights reserved.
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
  *
  * This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License 2.0
@@ -9,7 +9,8 @@
  * SPDX-License-Identifier: EPL-2.0
  *
  * Contributors:
- *     Data In Motion - initial API and implementation
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
  */
 package org.eclipse.fennec.jgit.test;
 
@@ -19,8 +20,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyPair;
 import java.util.Dictionary;
 import java.util.Hashtable;
@@ -64,10 +63,10 @@ import org.osgi.test.junit5.service.ServiceExtension;
  * known_hosts} file written after the server starts, exercising the new {@code
  * knownHosts} config option.
  *
- * <p>The four key fixtures under {@code /testkeys} cover: ed25519 (OpenSSH format),
- * RSA (OpenSSH format), RSA (classic PEM — the one format JSch supported, guarding
- * against regression), and a passphrase-protected ed25519 key (exercising the
- * configured-passphrase path).
+ * <p>The four keys are generated per run by {@link TestKeyFiles} and cover: ed25519
+ * (OpenSSH format), RSA (OpenSSH format), RSA (classic PEM — the one format JSch
+ * supported, guarding against regression), and a passphrase-protected ed25519 key
+ * (exercising the configured-passphrase path).
  */
 @RequireConfigurationAdmin
 @ExtendWith(ServiceExtension.class)
@@ -76,6 +75,8 @@ import org.osgi.test.junit5.service.ServiceExtension;
 public class GitSshTransportTest {
 
 	private static final String FILE_CONTENT = "fooBar";
+	private static final String OPENSSH = "-----BEGIN OPENSSH PRIVATE KEY-----";
+	private static final String CLASSIC_PEM = "-----BEGIN RSA PRIVATE KEY-----";
 
 	private Path repoDir;
 	private Path keyFile;
@@ -107,36 +108,63 @@ public class GitSshTransportTest {
 	public void testEd25519OpenSshKey(
 			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
 			@InjectService ConfigurationAdmin configAdmin) throws Exception {
-		assertReadableOverSsh("id_ed25519", null, gsAware, configAdmin);
+		Path key = TestKeyFiles.writeOpenSsh(TestKeyFiles.ed25519(), null);
+
+		assertIsInFormat(key, OPENSSH);
+		// Also proves the cipher check below discriminates rather than always passing.
+		assertThat(TestKeyFiles.cipherOf(key)).as("key is unencrypted").isEqualTo("none");
+		assertReadableOverSsh(key, null, gsAware, configAdmin);
 	}
 
 	@Test
 	public void testRsaOpenSshKey(
 			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
 			@InjectService ConfigurationAdmin configAdmin) throws Exception {
-		assertReadableOverSsh("id_rsa_openssh", null, gsAware, configAdmin);
+		Path key = TestKeyFiles.writeOpenSsh(TestKeyFiles.rsa(), null);
+
+		assertIsInFormat(key, OPENSSH);
+		assertReadableOverSsh(key, null, gsAware, configAdmin);
 	}
 
 	@Test
 	public void testRsaClassicPemKey(
 			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
 			@InjectService ConfigurationAdmin configAdmin) throws Exception {
-		assertReadableOverSsh("id_rsa_pem", null, gsAware, configAdmin);
+		Path key = TestKeyFiles.writeClassicPem(TestKeyFiles.rsa());
+
+		assertIsInFormat(key, CLASSIC_PEM);
+		assertReadableOverSsh(key, null, gsAware, configAdmin);
 	}
 
 	@Test
 	public void testPassphraseProtectedKey(
 			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
 			@InjectService ConfigurationAdmin configAdmin) throws Exception {
-		assertReadableOverSsh("id_ed25519_pw", "s3cret", gsAware, configAdmin);
+		Path key = TestKeyFiles.writeOpenSsh(TestKeyFiles.ed25519(), "s3cret");
+
+		assertIsInFormat(key, OPENSSH);
+		// An unencrypted key would authenticate just as well, leaving the configured-passphrase
+		// path untested; insist the key really is encrypted.
+		assertThat(TestKeyFiles.cipherOf(key)).as("key is encrypted").isEqualTo("aes256-ctr");
+		assertReadableOverSsh(key, "s3cret", gsAware, configAdmin);
 	}
 
 	/**
-	 * Serves a one-commit repo over ssh:// with the given key fixture and asserts the
+	 * The generated keys have to be in the formats this test is about, otherwise it would
+	 * happily prove that MINA can read back whatever MINA just wrote.
+	 */
+	private static void assertIsInFormat(Path key, String header) throws Exception {
+		assertThat(Files.readString(key)).as("private key format").startsWith(header);
+	}
+
+	/**
+	 * Serves a one-commit repo over ssh:// with the given private key and asserts the
 	 * {@link GitService} authenticates and reads it back.
 	 */
-	private void assertReadableOverSsh(String keyResource, String passphrase,
+	private void assertReadableOverSsh(Path privateKey, String passphrase,
 			ServiceAware<GitService> gsAware, ConfigurationAdmin configAdmin) throws Exception {
+
+		keyFile = privateKey;
 
 		// A real repo on disk with a single commit on 'main'.
 		repoDir = Files.createTempDirectory("gecko-jgit-ssh");
@@ -145,9 +173,6 @@ public class GitSshTransportTest {
 		served.add().addFilepattern("test").call();
 		served.commit().setAuthor("Hans Wurst", "hw@example.com").setMessage("add test").call();
 		servedRepo = served.getRepository();
-
-		// Extract the private-key fixture to a real file (MINA reads it from the filesystem).
-		keyFile = extractResource("/testkeys/" + keyResource);
 
 		// Start an in-process SSH server on an ephemeral port: generated host key, accept any
 		// public key, and serve git-upload-pack for the one repo above.
@@ -182,24 +207,10 @@ public class GitSshTransportTest {
 		configuration.update(props);
 
 		GitService service = gsAware.waitForService(15000l);
-		assertThat(service).as("GitService activated over ssh:// with key %s", keyResource).isNotNull();
+		assertThat(service).as("GitService activated over ssh:// with key %s", privateKey).isNotNull();
 		assertThat(service.getGitUrl()).isEqualTo(url);
 		assertThat(service.getBranches()).contains("refs/heads/main");
 		assertThat(service.getFiles().getFiles()).contains("test");
-	}
-
-	private Path extractResource(String resource) throws Exception {
-		Path target = Files.createTempFile("gecko-jgit-key", "");
-		try (InputStream is = getClass().getResourceAsStream(resource)) {
-			assertThat(is).as("key fixture %s", resource).isNotNull();
-			Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
-		}
-		try {
-			Files.setPosixFilePermissions(target, PosixFilePermissions.fromString("rw-------"));
-		} catch (UnsupportedOperationException ignored) {
-			// non-POSIX filesystem: MINA does not enforce key-file permissions anyway
-		}
-		return target;
 	}
 
 	private static void deleteQuietly(Path dir) throws Exception {

@@ -59,8 +59,6 @@ header:
     - 'cnf/**'
     - '**/src-gen/**'
     - '**/generated/**'
-    # throwaway SSH key pairs used as test fixtures, not source
-    - '**/testkeys/**'
     - '.gitattributes'
     - '.github/**'
     - '.gitignore'

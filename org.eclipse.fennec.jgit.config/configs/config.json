@@ -1,9 +1,9 @@
 {
   ":configurator:resource-version": 1,
-  
-  "GitConfig~udp": 
+
+  "GitConfig~models":
   {
-    "repo": "git@github.com:de-jena/upd-models.git",
+    "repo": "git@github.com:eclipse-fennec/emf.util.git",
     "branch": "main",
     "privateKey": "$[env:SSH_PRIVATE_KEY;default=$[prop:SSH_PRIVATE_KEY;default=]]",
     "privateKeyPassphrase":"$[env:SSH_PRIVATE_KEY_PWD;default=$[prop:SSH_PRIVATE_KEY_PWD;default=]]",

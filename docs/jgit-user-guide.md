@@ -25,7 +25,7 @@ public class ModelStore {
 
     // Configuration properties are propagated as service properties, so a target filter
     // picks one repository when several are configured.
-    @Reference(target = "(repo=git@github.com:de-jena/upd-models.git)")
+    @Reference(target = "(repo=git@github.com:eclipse-fennec/emf.util.git)")
     private GitService git;
 
     public byte[] loadModel(String path) throws IOException {
@@ -68,7 +68,7 @@ example), reading the secrets from the environment:
   ":configurator:resource-version": 1,
 
   "GitConfig~models": {
-    "repo": "git@github.com:de-jena/upd-models.git",
+    "repo": "git@github.com:eclipse-fennec/emf.util.git",
     "branch": "main",
     "privateKey": "$[env:SSH_PRIVATE_KEY;default=]",
     "privateKeyPassphrase": "$[env:SSH_PRIVATE_KEY_PWD;default=]",
