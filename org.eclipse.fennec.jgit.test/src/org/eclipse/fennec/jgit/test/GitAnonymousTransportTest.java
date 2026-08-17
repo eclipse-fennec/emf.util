@@ -16,13 +16,16 @@ package org.eclipse.fennec.jgit.test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Dictionary;
 import java.util.Hashtable;
 
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.transport.Daemon;
 import org.eclipse.jgit.transport.DaemonService;
 import org.eclipse.jgit.util.FileUtils;
@@ -90,37 +93,103 @@ public class GitAnonymousTransportTest {
 			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
 			@InjectService ConfigurationAdmin configAdmin) throws Exception {
 
-		// A real repo on disk with a single commit on 'main'.
+		String url = serveRepository(false);
+		GitService service = configureService(configAdmin, gsAware, url);
+
+		// Would be null if activate() still threw ClassCastException on the non-SSH transport.
+		assertThat(service).as("GitService activated over git://").isNotNull();
+		assertThat(service.getGitUrl()).isEqualTo(url);
+		assertThat(service.getBranches()).contains("refs/heads/main");
+		assertThat(service.getFiles().getFiles()).contains("test");
+	}
+
+	/**
+	 * The write counterpart: a commit written into the in-memory mirror reaches the
+	 * remote when, and only when, it is pushed. This is the end-to-end proof that the
+	 * in-core commit produces a real, transferable commit and that push is wired
+	 * through the same transport as fetch.
+	 */
+	@Test
+	public void testPushOverAnonymousGitProtocol(
+			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
+			@InjectService ConfigurationAdmin configAdmin) throws Exception {
+
+		String url = serveRepository(true);
+		GitService service = configureService(configAdmin, gsAware, url);
+		Repository servedRepo = served.getRepository();
+		ObjectId remoteHeadBefore = servedRepo.resolve("refs/heads/main");
+
+		String commitId = service.writeFile("pushed.txt", "pushed".getBytes(StandardCharsets.UTF_8), "add pushed");
+
+		// Default configuration: the commit is local to the mirror until push() is called.
+		assertThat(service.getFiles().getFiles()).contains("pushed.txt");
+		assertThat(servedRepo.resolve("refs/heads/main")).as("remote untouched before push")
+				.isEqualTo(remoteHeadBefore);
+
+		service.push();
+
+		assertThat(servedRepo.resolve("refs/heads/main").getName()).as("remote advanced to the new commit")
+				.isEqualTo(commitId);
+		ObjectId blob = servedRepo.resolve("refs/heads/main:pushed.txt");
+		assertThat(blob).as("pushed file present in the remote").isNotNull();
+		assertThat(new String(servedRepo.open(blob).getBytes(), StandardCharsets.UTF_8)).isEqualTo("pushed");
+	}
+
+	/**
+	 * Creates a repository on disk with a single commit on {@code main} and serves it
+	 * over the anonymous git protocol on an ephemeral port.
+	 *
+	 * @param allowPush whether receive-pack is offered, i.e. whether the remote
+	 *                  accepts writes
+	 * @return the {@code git://} URL of the served repository
+	 */
+	private String serveRepository(boolean allowPush) throws Exception {
 		repoDir = Files.createTempDirectory("gecko-jgit-anon");
 		served = Git.init().setDirectory(repoDir.toFile()).setInitialBranch("main").call();
 		Files.writeString(repoDir.resolve("test"), FILE_CONTENT);
 		served.add().addFilepattern("test").call();
 		served.commit().setAuthor("Hans Wurst", "hw@example.com").setMessage("add test").call();
 
-		// Serve it over git:// on an ephemeral port. Daemon.start() rebinds the socket and
-		// updates getAddress(), so the actual port is known only after start().
 		Repository servedRepo = served.getRepository();
+		if (allowPush) {
+			// The served repo has a working tree, and git refuses by default to move the branch
+			// that is checked out there. A real remote would be bare; here the working tree is
+			// simply allowed to fall behind.
+			StoredConfig servedConfig = servedRepo.getConfig();
+			servedConfig.setString("receive", null, "denyCurrentBranch", "ignore");
+			servedConfig.save();
+		}
+
+		// Daemon.start() rebinds the socket and updates getAddress(), so the actual port is
+		// known only after start().
 		daemon = new Daemon(new InetSocketAddress("127.0.0.1", 0));
-		DaemonService uploadPack = daemon.getService("upload-pack");
-		uploadPack.setEnabled(true);
-		uploadPack.setOverridable(false); // force upload-pack on regardless of per-repo config
+		enable(daemon.getService("upload-pack"));
+		if (allowPush) {
+			enable(daemon.getService("receive-pack"));
+		}
 		daemon.setRepositoryResolver((req, name) -> servedRepo);
 		daemon.start();
-		String url = "git://127.0.0.1:" + daemon.getAddress().getPort() + "/served";
+		return "git://127.0.0.1:" + daemon.getAddress().getPort() + "/served";
+	}
 
-		// Configure the real GitServiceImpl against the git:// URL (no privateKey).
+	/** Forces the service on regardless of the per-repository daemon configuration. */
+	private static void enable(DaemonService service) {
+		service.setEnabled(true);
+		service.setOverridable(false);
+	}
+
+	/** Configures the real GitServiceImpl against the git:// URL (no privateKey). */
+	private GitService configureService(ConfigurationAdmin configAdmin, ServiceAware<GitService> gsAware, String url)
+			throws Exception {
 		configuration = configAdmin.createFactoryConfiguration("GitConfig", "?");
 		Dictionary<String, Object> props = new Hashtable<>();
 		props.put("repo", url);
 		props.put("branch", "main");
 		configuration.update(props);
 
-		// Would be null if activate() still threw ClassCastException on the non-SSH transport.
 		GitService service = gsAware.waitForService(10000l);
 		assertThat(service).as("GitService activated over git://").isNotNull();
-		assertThat(service.getGitUrl()).isEqualTo(url);
-		assertThat(service.getBranches()).contains("refs/heads/main");
-		assertThat(service.getFiles().getFiles()).contains("test");
+		return service;
 	}
 
 }

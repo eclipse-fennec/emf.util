@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2012 - 2024 Data In Motion and others.
+ * Copyright (c) 2012 - 2026 Data In Motion and others.
  * All rights reserved. 
  * 
  * This program and the accompanying materials are made
@@ -24,24 +24,32 @@ import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PushCommand;
+import org.eclipse.jgit.api.TransportCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
 import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.CredentialsProvider;
+import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.RefSpec;
+import org.eclipse.jgit.transport.RemoteRefUpdate;
 import org.eclipse.jgit.transport.SshTransport;
 import org.eclipse.jgit.transport.URIish;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.transport.sshd.JGitKeyCache;
 import org.eclipse.jgit.transport.sshd.KeyPasswordProvider;
 import org.eclipse.jgit.transport.sshd.SshdSessionFactory;
@@ -49,12 +57,17 @@ import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
 import org.eclipse.jgit.util.FS;
+import org.eclipse.fennec.jgit.api.CommitRequest;
 import org.eclipse.fennec.jgit.api.GitConfig;
 import org.eclipse.fennec.jgit.api.GitService;
 import org.eclipse.fennec.jgit.api.TreeResult;
+import org.eclipse.fennec.jgit.exceptions.GitConflictException;
+import org.eclipse.fennec.jgit.exceptions.GitFileNotFoundException;
+import org.eclipse.fennec.jgit.exceptions.GitWriteException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.metatype.annotations.Designate;
 
 @Component(configurationPid = "GitConfig", configurationPolicy = ConfigurationPolicy.REQUIRE, immediate = true)
@@ -91,6 +104,10 @@ public class GitServiceImpl implements GitService{
 	private Git git;
 	private FetchCommand fetchCmd;
 	private SshdSessionFactory sshSessionFactory;
+	private CredentialsProvider credentialsProvider;
+	private GitCommitWriter writer;
+	/** Serializes everything that moves the branch or talks to the remote. */
+	private final Object writeLock = new Object();
 
 	@Activate
 	public void activate(GitConfig config) throws IOException, GitAPIException {
@@ -107,18 +124,20 @@ public class GitServiceImpl implements GitService{
 			fetchCmd = git.fetch();
 			fetchCmd.setRemote(config.repo());
 			fetchCmd.setRefSpecs(new RefSpec("+refs/heads/*:refs/heads/*"));
-			// Only build and attach the SSH backend when a private key is configured; anonymous
-			// git:// and https:// remotes need no SSH stack at all. The backend is the Apache
-			// MINA sshd session factory, which (unlike the legacy JSch one) parses OpenSSH-format
-			// and ed25519 keys. It is only attached to actual SshTransports.
+			// Only build the SSH backend when a private key is configured; anonymous git:// and
+			// https:// remotes need no SSH stack at all. The backend is the Apache MINA sshd
+			// session factory, which (unlike the legacy JSch one) parses OpenSSH-format and
+			// ed25519 keys. It is only attached to actual SshTransports.
 			if (config.privateKey() != null) {
 				sshSessionFactory = createSshSessionFactory();
-				fetchCmd.setTransportConfigCallback(t -> {
-					if (t instanceof SshTransport) {
-						((SshTransport) t).setSshSessionFactory(sshSessionFactory);
-					}
-				});
 			}
+			// https remotes authenticate with user name and token instead. Reading a public repo
+			// needs no credentials, pushing to it does.
+			if (config.username() != null && !config.username().isBlank()) {
+				credentialsProvider = new UsernamePasswordCredentialsProvider(config.username(),
+						config.password() == null ? "" : config.password());
+			}
+			configureTransport(fetchCmd);
 			fetchCmd.call();
 		} else {
 			FileRepositoryBuilder builder = new FileRepositoryBuilder();
@@ -130,6 +149,25 @@ public class GitServiceImpl implements GitService{
 			git = new Git(repo);
 		}
 		repo.getObjectDatabase();
+		writer = new GitCommitWriter(repo);
+	}
+
+	/**
+	 * Attaches the configured authentication to a transport command. Fetch and push
+	 * share it, so a remote that can be read with the configured credentials can
+	 * also be written to.
+	 */
+	private void configureTransport(TransportCommand<?, ?> command) {
+		if (sshSessionFactory != null) {
+			command.setTransportConfigCallback(t -> {
+				if (t instanceof SshTransport) {
+					((SshTransport) t).setSshSessionFactory(sshSessionFactory);
+				}
+			});
+		}
+		if (credentialsProvider != null) {
+			command.setCredentialsProvider(credentialsProvider);
+		}
 	}
 
 	@Override
@@ -161,9 +199,15 @@ public class GitServiceImpl implements GitService{
 		}
 	}
 	
-	private boolean isRemote(String repo) {
-		// git://, git@host:path, https:// and ssh:// are all remote; anything else is an on-disk path.
-		return repo.startsWith("git") || repo.startsWith("https") || repo.startsWith("ssh");
+	static boolean isRemote(String repo) {
+		// A remote is a URL (git://, ssh://, http(s)://) or an scp-style git@host:path; anything
+		// else is a path on disk. The scheme has to be matched in full: a directory named
+		// "gitRepo" or "sshkeys" merely starts with the letters of one and is still a directory.
+		return repo.startsWith("git://") //
+				|| repo.startsWith("git@") //
+				|| repo.startsWith("ssh://") //
+				|| repo.startsWith("http://") //
+				|| repo.startsWith("https://");
 	}
 
 	/**
@@ -198,6 +242,7 @@ public class GitServiceImpl implements GitService{
 		return builder.build(new JGitKeyCache());
 	}
 
+	@Deactivate
 	public void deactivate() {
 		if (sshSessionFactory != null) {
 			sshSessionFactory.close();
@@ -253,9 +298,11 @@ public class GitServiceImpl implements GitService{
 			loadFile(commitId, file, byteArrayOutputStream);
 			ByteArrayInputStream bais = new ByteArrayInputStream(byteArrayOutputStream.toByteArray());
 			return bais;
+		} catch (GitFileNotFoundException e) {
+			throw e;
 		} catch (Exception e) {
 			throw new RuntimeException("Unable to load file " + file, e);
-		} 
+		}
 	}
 
 	@Override
@@ -274,16 +321,24 @@ public class GitServiceImpl implements GitService{
 				treeWalk.addTree(tree);
 				treeWalk.setRecursive(true);
 				treeWalk.setFilter(PathFilter.create(file));
-				if (!treeWalk.next()) {
-					return;
+				// The filter also lets the content of a directory of that name through, so only an
+				// exact hit is the file that was asked for.
+				while (treeWalk.next()) {
+					if (file.equals(treeWalk.getPathString())) {
+						ObjectId objectId = treeWalk.getObjectId(0);
+						ObjectLoader loader = repo.open(objectId);
+						loader.copyTo(out);
+						return;
+					}
 				}
-				ObjectId objectId = treeWalk.getObjectId(0);
-				ObjectLoader loader = repo.open(objectId);
-				loader.copyTo(out);
+				throw new GitFileNotFoundException(
+						file + " does not exist in " + (commitId == null ? getRef() : commitId));
 			}
+		} catch (GitFileNotFoundException e) {
+			throw e;
 		} catch (Exception e) {
 			throw new RuntimeException("Unable to load file " + file, e);
-		} 
+		}
 	}
 	
 	@Override
@@ -301,5 +356,97 @@ public class GitServiceImpl implements GitService{
 	public Iterable<RevCommit> getLog() throws GitAPIException {
 		return git.log().call();
 
+	}
+
+	@Override
+	public String commit(CommitRequest request) {
+		Objects.requireNonNull(request, "request");
+		synchronized (writeLock) {
+			ObjectId commitId = writer.commit(getRef(), request, author(request));
+			logger.log(Level.INFO, "Committed {0} change(s) as {1} on {2}", request.getChanges().size(),
+					commitId.getName(), getRef());
+			if (shouldPush(request)) {
+				pushInternal();
+			}
+			return commitId.getName();
+		}
+	}
+
+	@Override
+	public String writeFile(String path, byte[] content, String message) {
+		return commit(CommitRequest.builder(message).put(path, content).build());
+	}
+
+	@Override
+	public String writeFile(String path, InputStream content, String message) {
+		return commit(CommitRequest.builder(message).put(path, content).build());
+	}
+
+	@Override
+	public String deleteFile(String path, String message) {
+		return commit(CommitRequest.builder(message).delete(path).build());
+	}
+
+	@Override
+	public void push() {
+		synchronized (writeLock) {
+			pushInternal();
+		}
+	}
+
+	private boolean shouldPush(CommitRequest request) {
+		Boolean requested = request.getPush();
+		return requested == null ? config.pushOnCommit() : requested.booleanValue();
+	}
+
+	/**
+	 * Resolves the identity for a commit: what the request asks for, falling back to
+	 * the configured author.
+	 */
+	private PersonIdent author(CommitRequest request) {
+		String name = request.getAuthorName() == null ? config.authorName() : request.getAuthorName();
+		String email = request.getAuthorEmail() == null ? config.authorEmail() : request.getAuthorEmail();
+		return new PersonIdent(name, email);
+	}
+
+	private void pushInternal() {
+		if (!isRemote(config.repo())) {
+			// Local on-disk repo: no remote to push to, the commit is already where it belongs.
+			logger.log(Level.INFO, "Skipping push for local repo {0}", config.repo());
+			return;
+		}
+		try {
+			PushCommand pushCmd = git.push() //
+					.setRemote(config.repo()) //
+					.setRefSpecs(new RefSpec(getRef() + ":" + getRef()));
+			configureTransport(pushCmd);
+			for (PushResult result : pushCmd.call()) {
+				for (RemoteRefUpdate update : result.getRemoteUpdates()) {
+					checkPushed(update);
+				}
+			}
+		} catch (GitWriteException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new GitWriteException("Push failed for " + config.repo(), e);
+		}
+	}
+
+	/**
+	 * A push that reaches the remote still reports per-ref whether it was accepted,
+	 * so a rejection must be read off the result instead of an exception.
+	 */
+	private void checkPushed(RemoteRefUpdate update) {
+		switch (update.getStatus()) {
+		case OK:
+		case UP_TO_DATE:
+			return;
+		case REJECTED_NONFASTFORWARD:
+			throw new GitConflictException(config.repo() + " rejected " + update.getRemoteName()
+					+ " as non-fast-forward, fetch and retry");
+		default:
+			throw new GitWriteException("Push of " + update.getRemoteName() + " to " + config.repo() + " failed: "
+					+ update.getStatus() + (update.getMessage() == null ? "" : " - " + update.getMessage()));
+		}
 	}
 }

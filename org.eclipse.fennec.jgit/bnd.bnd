@@ -1,5 +1,10 @@
 -library: enableEMF
 
+# JGit logs through slf4j; without an API on the path its SystemReader fails to initialize.
+-testpath: \
+	assertj-core;version=latest,\
+	slf4j.api;version='[2.0,3)'
+
 -buildpath: \
 	org.eclipse.jgit;version=latest,\
 	org.eclipse.jgit.ssh.apache;version=latest
