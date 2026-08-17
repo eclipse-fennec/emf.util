@@ -1,0 +1,8 @@
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.jgit;version=latest,\
+	org.eclipse.jgit.ssh.apache;version=latest
+
+
+
