@@ -67,6 +67,8 @@ subprojects {
             'org.eclipse.fennec.openapi.ecore',
             'org.eclipse.fennec.openapi.client',
             'org.eclipse.fennec.model.atlas.eobject.provider',
+            'org.eclipse.fennec.jgit',
+            'org.eclipse.fennec.git.webhook.rest',
     ]
     afterEvaluate {
         if (project.name in coverageFloorBundles) {

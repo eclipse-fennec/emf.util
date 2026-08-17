@@ -13,7 +13,8 @@
 	bnd.identity;id='org.eclipse.fennec.openapi.osgi',\
 	bnd.identity;id='org.eclipse.fennec.grpc',\
 	bnd.identity;id='io.grpc.netty',\
-	bnd.identity;id='org.eclipse.fennec.sensinact.mapping'
+	bnd.identity;id='org.eclipse.fennec.sensinact.mapping',\
+	bnd.identity;id='org.eclipse.fennec.jgit'
 # io.grpc comes from the gecko wrap bundles (org.geckoprojects.libraries:io.grpc.core /
 # io.grpc.netty in central.mvn — upstream grpc jars ship no OSGi metadata). io.grpc.netty is
 # required explicitly so consumers get the recommended transport (+ the official io.netty
@@ -80,4 +81,13 @@
 	org.objectweb.asm.tree.analysis;version='[9.9.1,9.9.2)',\
 	org.objectweb.asm.util;version='[9.9.1,9.9.2)',\
 	slf4j.api;version='[2.0.17,2.0.18)',\
-	slf4j.simple;version='[2.0.17,2.0.18)'
+	slf4j.simple;version='[2.0.17,2.0.18)',\
+	bcprov;version='[1.84.0,1.84.1)',\
+	com.googlecode.javaewah.JavaEWAH;version='[1.2.3,1.2.4)',\
+	org.apache.commons.commons-codec;version='[1.22.0,1.22.1)',\
+	org.apache.sshd.osgi;version='[2.19.0,2.19.1)',\
+	org.apache.sshd.sftp;version='[2.19.0,2.19.1)',\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version='[1.1.0,1.1.1)',\
+	org.eclipse.fennec.jgit;version=snapshot,\
+	org.eclipse.jgit;version='[7.7.1,7.7.2)',\
+	org.eclipse.jgit.ssh.apache;version='[7.7.1,7.7.2)'

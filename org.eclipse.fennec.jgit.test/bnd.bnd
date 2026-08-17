@@ -1,0 +1,19 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+
+-library: enableOSGi-Test
+
+# sets the usually required buildpath using the bnd library, you can extend it with the normal -buildpath to your liking
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.test.junit5.cm;version=latest,\
+	org.eclipse.fennec.jgit;version=snapshot,\
+	org.eclipse.jgit;version=latest,\
+	org.apache.sshd.osgi;version=latest,\
+	bcprov;version=latest,\
+
+Private-Package: org.eclipse.fennec.jgit.test
+
+
+# Sometimes without DynamicImport Mockito will not find certain classes
+#DynamicImport-Package: *

@@ -191,4 +191,13 @@ org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.impl:0
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.osgi:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.scope.api:0.1.0-SNAPSHOT
 
-
+#jGit
+org.eclipse.jgit:org.eclipse.jgit:7.7.1.202607240634-r
+org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.7.1.202607240634-r
+org.apache.sshd:sshd-sftp:2.19.0
+org.apache.sshd:sshd-osgi:2.19.0
+com.googlecode.javaewah:JavaEWAH:1.2.3
+commons-codec:commons-codec:1.22.0
+org.bouncycastle:bcprov-jdk18on:1.84
+org.bouncycastle:bcpkix-jdk18on:1.84
+org.bouncycastle:bcutil-jdk18on:1.84
