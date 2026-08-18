@@ -57,7 +57,7 @@ import jakarta.ws.rs.core.Response;
  */
 @JakartarsResource
 @JakartarsName("GithubWebhookResource")
-@JakartarsExtensionSelect("(jakartars.name=" + GithubWebhookSignatureFilter.NAME + ")")
+@JakartarsExtensionSelect("(osgi.jakartars.name=" + GithubWebhookSignatureFilter.NAME + ")")
 @Component(service = GithubWebhookResource.class, scope = ServiceScope.PROTOTYPE,
 		configurationPid = GithubWebhookSignatureFilter.CONFIG_PID,
 		configurationPolicy = ConfigurationPolicy.REQUIRE)
