@@ -1,0 +1,50 @@
+{
+  "ref": "refs/heads/draft",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "8a0cc827a6497ee916b52d17ff679c539d46b283",
+  "created": false,
+  "deleted": false,
+  "forced": false,
+  "compare": "https://github.com/acme/models/compare/abc123...8a0cc827a649",
+  "repository": {
+    "id": 987654321,
+    "node_id": "R_kgDOAbCdEf",
+    "name": "models",
+    "full_name": "acme/models",
+    "private": false,
+    "html_url": "https://github.com/acme/models",
+    "clone_url": "https://github.com/acme/models.git",
+    "ssh_url": "git@github.com:acme/models.git",
+    "default_branch": "main"
+  },
+  "pusher": {
+    "name": "octocat",
+    "email": "octocat@example.com"
+  },
+  "commits": [
+    {
+      "id": "3f1b0d1c9a7e5b2d4c6a8e0f2b4d6a8c0e2f4b6d",
+      "message": "add the person schema",
+      "timestamp": "2026-08-18T09:14:22+02:00",
+      "added": ["models/person.ecore"],
+      "removed": [],
+      "modified": []
+    },
+    {
+      "id": "8a0cc827a6497ee916b52d17ff679c539d46b283",
+      "message": "add alice",
+      "timestamp": "2026-08-18T09:16:03+02:00",
+      "added": ["instances/alice.xmi"],
+      "removed": ["instances/obsolete.xmi"],
+      "modified": ["models/person.ecore"]
+    }
+  ],
+  "head_commit": {
+    "id": "8a0cc827a6497ee916b52d17ff679c539d46b283",
+    "message": "add alice",
+    "timestamp": "2026-08-18T09:16:03+02:00",
+    "added": ["instances/alice.xmi"],
+    "removed": ["instances/obsolete.xmi"],
+    "modified": ["models/person.ecore"]
+  }
+}

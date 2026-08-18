@@ -1,0 +1,27 @@
+{
+  ":configurator:resource-version": 1,
+
+  "org.apache.felix.http~webhookTestHttp": {
+    "org.osgi.service.http.port": "8199",
+    "org.osgi.service.http.host": "localhost",
+    "org.apache.felix.http.context_path": "/",
+    "org.apache.felix.http.name": "Git Webhook Test HTTP",
+    "org.apache.felix.http.runtime.init.id": "webhookTestHttp"
+  },
+
+  "JakartarsServletWhiteboardRuntimeComponent~webhookTestRest": {
+    "jersey.jakartars.whiteboard.name": "Git Webhook Test REST",
+    "jersey.context.path": "rest",
+    "osgi.http.whiteboard.target": "(id=webhookTestHttp)"
+  },
+
+  "org.eclipse.fennec.model.atlas.management.git.webhook.github": {
+    "githubSecret": "test-secret",
+    "requireSignature": true
+  },
+
+  "org.eclipse.fennec.model.atlas.management.git.webhook.gitlab": {
+    "gitlabToken": "test-token",
+    "requireSignature": true
+  }
+}

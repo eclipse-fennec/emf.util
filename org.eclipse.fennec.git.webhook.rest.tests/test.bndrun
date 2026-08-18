@@ -1,0 +1,43 @@
+-library: enableOSGi-Test
+
+-runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
+-runee: JavaSE-21
+
+# The test HTTP server is created by the factory configuration in configs/config.json;
+# the framework-level default server stays off so only that one binds a port.
+-runproperties: \
+	org.osgi.service.http.port=-1,\
+	${if;${is;${driver};gradle};gosh.args=--nointeractive}
+
+-runvm: -ea
+
+-resolve.effective: active
+
+# The bundle under test plus everything wired only by DS/config, which capability
+# resolution alone would not pull in: the Jakarta RS whiteboard (server side), the codec
+# that turns the provider JSON into the EMF payload, the EMF runtime that registers the
+# webhook EPackages, the typed-event bus the resource publishes on, and the configurator
+# that applies configs/config.json.
+-runrequires: \
+	bnd.identity;id='org.eclipse.fennec.git.webhook.rest.tests',\
+	bnd.identity;id='org.eclipse.fennec.git.webhook.rest',\
+	bnd.identity;id='org.eclipse.fennec.git.github.webhook.model',\
+	bnd.identity;id='org.eclipse.fennec.git.gitlab.webhook.model',\
+	bnd.identity;id='org.eclipse.fennec.codec.rest',\
+	bnd.identity;id='org.eclipse.fennec.codec',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.component',\
+	bnd.identity;id='org.eclipse.osgitech.rest',\
+	bnd.identity;id='org.eclipse.osgitech.rest.servlet.whiteboard',\
+	bnd.identity;id='org.apache.felix.http.jetty12',\
+	bnd.identity;id='org.apache.aries.typedevent.bus',\
+	bnd.identity;id='org.apache.felix.configadmin',\
+	bnd.identity;id='org.apache.felix.configurator',\
+	bnd.identity;id='org.apache.felix.scr'
+
+-runbundles.test: \
+	org.eclipse.fennec.git.webhook.rest.tests;version=snapshot
+
+# The spifly framework-extension variant breaks weaving at startup (it embeds an older ASM);
+# force the resolver onto the classic dynamic bundle, as the sibling test bundles do.
+-runblacklist: \
+	bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension'

@@ -1,0 +1,48 @@
+Bundle-Name: Fennec Git Webhook REST OSGi Tests
+Bundle-Description: OSGi integration test for the git webhook REST endpoints: \
+ drives /github/webhook and /gitlab/webhook over HTTP through the real Jakarta RS \
+ whiteboard with captured provider wire-format payloads, and asserts that the neutral \
+ WebhookPayload is delivered on the expected typed-event topic. Covers the three seams \
+ the unit tests cannot see: whiteboard registration of the resource, name-binding of the \
+ signature filter, and the codec's JSON -> EMF feature-key mapping.
+
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+
+-library: \
+	enableOSGi-Test,\
+	enableEMF
+
+# org.eclipse.fennec.git.webhook.rest is the bundle under test (see -runrequires in
+# test.bndrun). It is on the buildpath so bnd/Gradle know this project depends on it:
+# without that edge `resolve.test` can run before the rest jar is built (races under
+# --parallel) and the resolution fails on osgi.identity=org.eclipse.fennec.git.webhook.rest.
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.test.junit5.cm;version=latest,\
+	org.osgi.service.typedevent;version=latest,\
+	org.osgi.service.jakartars;version=latest,\
+	org.osgi.dto;version=latest,\
+	org.eclipse.fennec.git.webhook.model;version=snapshot,\
+	org.eclipse.fennec.git.github.webhook.model;version=snapshot,\
+	org.eclipse.fennec.git.gitlab.webhook.model;version=snapshot,\
+	org.eclipse.fennec.git.webhook.rest;version=snapshot
+
+Private-Package: org.eclipse.fennec.git.webhook.rest.tests
+
+# configs/ is picked up by the configurator from this bundle: it starts the test HTTP
+# server + Jakarta RS whiteboard and supplies the two PIDs that gate the webhook
+# components (without a configuration they do not activate at all).
+# payloads/ are deliveries captured from the providers - never hand-written, so the test
+# pins the real wire format rather than our idea of it.
+-includeresource: \
+	OSGI-INF/configurator/=configs/,\
+	payloads/=payloads/
+
+# Without this the configurator ignores OSGI-INF/configurator/ in this bundle and neither
+# the test HTTP server nor the webhook component configurations are ever applied.
+Require-Capability: osgi.extender;filter:='(osgi.extender=osgi.configurator)'
+
+Bundle-Version: 1.0.0.SNAPSHOT
+
+-maven-release: local

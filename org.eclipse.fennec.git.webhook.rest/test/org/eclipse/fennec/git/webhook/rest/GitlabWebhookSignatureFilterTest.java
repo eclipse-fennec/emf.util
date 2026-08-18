@@ -23,8 +23,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
+import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,8 +36,9 @@ import jakarta.ws.rs.core.Response;
 
 /**
  * Unit tests for {@link GitlabWebhookSignatureFilter}: token verification,
- * fail-closed behaviour and push-event gating. The GitLab check is header-only,
- * so the filter must never touch the entity stream.
+ * fail-closed behaviour and push-event gating. The GitLab check is header-only, so the
+ * filter must not read the entity stream to decide — it only drains it once the request
+ * is rejected, so the container can keep the connection alive.
  */
 class GitlabWebhookSignatureFilterTest {
 
@@ -82,6 +85,22 @@ class GitlabWebhookSignatureFilterTest {
 		ContainerRequestContext ctx = gitlabCtx("Tag Push Hook", TOKEN);
 		filter(TOKEN, true).filter(ctx);
 		assertEquals(200, capturedStatus(ctx));
+	}
+
+	@Test
+	void rejectedRequest_bodyIsDrained() throws IOException {
+		ContainerRequestContext ctx = gitlabCtx("Push Hook", "wrong");
+		ByteArrayInputStream body = new ByteArrayInputStream(
+				"{\"object_kind\":\"push\"}".getBytes(StandardCharsets.UTF_8));
+		when(ctx.hasEntity()).thenReturn(true);
+		when(ctx.getEntityStream()).thenReturn(body);
+
+		filter(TOKEN, true).filter(ctx);
+
+		assertEquals(401, capturedStatus(ctx));
+		// A body left half-read makes the container close the connection after the response,
+		// which costs the provider the next delivery pipelined onto it.
+		assertEquals(0, body.available(), "rejected request left its body unread");
 	}
 
 	@Test
