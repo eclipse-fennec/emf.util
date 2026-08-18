@@ -24,6 +24,7 @@ import org.osgi.service.jakartars.whiteboard.propertytypes.JakartarsExtension;
 import org.osgi.service.jakartars.whiteboard.propertytypes.JakartarsName;
 
 import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Response;
 
 /**
@@ -49,7 +50,7 @@ import jakarta.ws.rs.core.Response;
  * @author Data In Motion
  * @since 1.0
  */
-@Component(configurationPid = GitlabWebhookSignatureFilter.CONFIG_PID, configurationPolicy = ConfigurationPolicy.REQUIRE)
+@Component(service = ContainerRequestFilter.class, configurationPid = GitlabWebhookSignatureFilter.CONFIG_PID, configurationPolicy = ConfigurationPolicy.REQUIRE)
 @JakartarsExtension
 @JakartarsName(GitlabWebhookSignatureFilter.NAME)
 @VerifyGitlabWebhookSignature

@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.git.webhook.rest;
 
+import org.eclipse.fennec.codec.rest.annotations.ResourceOption;
 import org.eclipse.fennec.codec.rest.annotations.json.RootElement;
 import org.eclipse.fennec.git.gitlab.webhook.model.gitlabwebhook.GitlabWebhookPackage;
 import org.eclipse.fennec.git.webhook.model.gitwebhook.WebhookPayload;
@@ -72,6 +73,7 @@ public class GitlabWebhookResource {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@VerifyGitlabWebhookSignature
 	public Response webhook(
+			@ResourceOption(key = /* codec key for */ "useNamesFromExtendedMetadata", value = "true", valueType = Boolean.class)
 			@RootElement(rootType = GitlabWebhookPackage.eNS_URI + "#//GitlabPayload") WebhookPayload payload) {
 		if (payload == null || payload.getRepositoryFullName() == null) {
 			return Response.status(Response.Status.BAD_REQUEST)

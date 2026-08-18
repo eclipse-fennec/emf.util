@@ -1,0 +1,32 @@
+{
+  "object_kind": "push",
+  "event_name": "push",
+  "ref": "refs/heads/draft",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "8a0cc827a6497ee916b52d17ff679c539d46b283",
+  "checkout_sha": "8a0cc827a6497ee916b52d17ff679c539d46b283",
+  "user_id": 42,
+  "user_name": "Octo Cat",
+  "user_username": "octocat",
+  "project_id": 15,
+  "project": {
+    "id": 15,
+    "name": "models",
+    "path_with_namespace": "acme/models",
+    "web_url": "https://gitlab.com/acme/models",
+    "git_http_url": "https://gitlab.com/acme/models.git",
+    "git_ssh_url": "git@gitlab.com:acme/models.git",
+    "default_branch": "main"
+  },
+  "total_commits_count": 1,
+  "commits": [
+    {
+      "id": "8a0cc827a6497ee916b52d17ff679c539d46b283",
+      "message": "add alice",
+      "timestamp": "2026-08-18T09:16:03+02:00",
+      "added": ["instances/alice.xmi"],
+      "removed": ["instances/obsolete.xmi"],
+      "modified": ["models/person.ecore"]
+    }
+  ]
+}
