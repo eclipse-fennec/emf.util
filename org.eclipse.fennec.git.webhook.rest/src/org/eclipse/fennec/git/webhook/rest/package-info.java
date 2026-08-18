@@ -17,7 +17,7 @@
  *
  * <p>Two Jakarta RS resources ({@code /github} and {@code /gitlab}) parse the
  * host-specific push payload into its concrete
- * {@link org.eclipse.fennec.model.atlas.management.git.webhook.model.gitwebhook.WebhookPayload}
+ * {@link org.eclipse.fennec.git.webhook.model.gitwebhook.WebhookPayload}
  * subtype via the Fennec codec, then deliver the <em>neutral</em>
  * {@code WebhookPayload} onto the {@code TypedEventBus} keyed by a
  * repository+branch topic. Everything downstream (the git storage service, the

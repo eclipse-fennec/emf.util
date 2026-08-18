@@ -15,12 +15,12 @@
     "osgi.http.whiteboard.target": "(id=webhookTestHttp)"
   },
 
-  "org.eclipse.fennec.model.atlas.management.git.webhook.github": {
+  "org.eclipse.fennec.git.webhook.github": {
     "githubSecret": "test-secret",
     "requireSignature": true
   },
 
-  "org.eclipse.fennec.model.atlas.management.git.webhook.gitlab": {
+  "org.eclipse.fennec.git.webhook.gitlab": {
     "gitlabToken": "test-token",
     "requireSignature": true
   }
