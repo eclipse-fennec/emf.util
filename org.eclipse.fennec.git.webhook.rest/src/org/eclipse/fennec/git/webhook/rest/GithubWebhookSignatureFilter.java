@@ -65,7 +65,7 @@ import jakarta.ws.rs.core.Response;
 public class GithubWebhookSignatureFilter extends AbstractWebhookSignatureFilter {
 
 	/** Configuration PID gating the GitHub webhook endpoint and its filter. */
-	public static final String CONFIG_PID = "org.eclipse.fennec.model.atlas.management.git.webhook.github";
+	public static final String CONFIG_PID = "org.eclipse.fennec.git.webhook.github";
 	/** Whiteboard name, targeted by the resource's extension select. */
 	public static final String NAME = "GithubWebhookSignatureFilter";
 

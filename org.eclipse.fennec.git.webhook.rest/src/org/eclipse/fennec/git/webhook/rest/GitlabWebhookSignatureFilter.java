@@ -57,7 +57,7 @@ import jakarta.ws.rs.core.Response;
 public class GitlabWebhookSignatureFilter extends AbstractWebhookSignatureFilter {
 
 	/** Configuration PID gating the GitLab webhook endpoint and its filter. */
-	public static final String CONFIG_PID = "org.eclipse.fennec.model.atlas.management.git.webhook.gitlab";
+	public static final String CONFIG_PID = "org.eclipse.fennec.git.webhook.gitlab";
 	/** Whiteboard name, targeted by the resource's extension select. */
 	public static final String NAME = "GitlabWebhookSignatureFilter";
 
