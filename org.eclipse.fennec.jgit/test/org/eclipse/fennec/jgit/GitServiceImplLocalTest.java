@@ -209,6 +209,20 @@ public class GitServiceImplLocalTest {
 		assertThatThrownBy(() -> service.readLatestFile("tes")).isInstanceOf(GitFileNotFoundException.class);
 	}
 
+	/**
+	 * A listing is asked for its paths repeatedly — a store checks
+	 * {@code getFiles().contains(path)} once per object — so the list is derived once
+	 * and handed out as the same immutable value.
+	 */
+	@Test
+	public void testTheFileListIsStableAndImmutable() {
+		TreeResult result = service.getFiles();
+
+		assertThat(result.getFiles()).isSameAs(result.getFiles());
+		assertThatThrownBy(() -> result.getFiles().add("nope"))
+				.isInstanceOf(UnsupportedOperationException.class);
+	}
+
 	// --- existence and blob ids --------------------------------------------------
 
 	@Test

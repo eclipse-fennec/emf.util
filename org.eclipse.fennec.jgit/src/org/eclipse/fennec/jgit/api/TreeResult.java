@@ -30,6 +30,12 @@ public class TreeResult {
 	private final List<FileEntry> entries;
 	/** Built on first lookup; a listing is usually consumed as a list, not by path. */
 	private volatile Map<String, String> blobIds;
+	/**
+	 * The paths, derived from the entries once. A consumer that asks a listing
+	 * whether it holds a path — {@code getFiles().contains(path)}, once per object on
+	 * a read path — must not pay for a fresh list every time.
+	 */
+	private volatile List<String> paths;
 
 	/**
 	 * Builds a result carrying paths only. The blob id of every entry is
@@ -72,12 +78,18 @@ public class TreeResult {
 	}
 
 	/**
-	 * @return the repository-relative paths of all listed files
+	 * @return the repository-relative paths of all listed files, in tree order; the
+	 *         same immutable list on every call
 	 */
 	public List<String> getFiles() {
-		List<String> files = new ArrayList<>(entries.size());
-		for (FileEntry entry : entries) {
-			files.add(entry.path());
+		List<String> files = paths;
+		if (files == null) {
+			List<String> derived = new ArrayList<>(entries.size());
+			for (FileEntry entry : entries) {
+				derived.add(entry.path());
+			}
+			files = Collections.unmodifiableList(derived);
+			paths = files;
 		}
 		return files;
 	}

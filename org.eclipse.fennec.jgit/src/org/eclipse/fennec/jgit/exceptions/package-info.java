@@ -12,7 +12,7 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-@Version("1.1.0")
+@Version("1.0.0")
 @Export
 package org.eclipse.fennec.jgit.exceptions;
 
