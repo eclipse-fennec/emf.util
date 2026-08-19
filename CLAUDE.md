@@ -277,3 +277,48 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
   guava/gson/jsr305.
 - **Next:** OData; the `SoapOperation`/`GrpcService`-`GrpcMethod`/`OpenApiOperation` descriptors
   are the decision-neutral raw material for the later `EOperation`-vs-DDSR projection.
+
+## Git repositories (JGit)
+
+Bundles: `org.eclipse.fennec.jgit` (the `GitService` API in `…jgit.api`, exceptions in
+`…jgit.exceptions`, and the DS component implementing them — the impl is a *private* package,
+unlike the other utilities), `org.eclipse.fennec.jgit.config` (example configurator config +
+`launch.bndrun`) and `org.eclipse.fennec.jgit.test` (OSGi ITs: local repo, anonymous `git://`,
+SSH). Plain-JUnit tests live in `org.eclipse.fennec.jgit/test`. See `docs/jgit-user-guide.md`.
+
+Reading and writing files/commits/branches of a git repository through an OSGi service, no
+working tree and no `git` binary. Factory component (PID `GitConfig`); `repo` decides the mode:
+a URL (`git://`, `git@host:`, `ssh://`, `http(s)://`) builds an **in-memory mirror** populated by
+fetch, anything else opens the repository **on disk**. Commits are written straight into the
+object database (`GitCommitWriter`: in-core `DirCache` from the parent tree → `CommitBuilder` →
+`RefUpdate` with the old head as expected value), which is what makes one code path serve both
+modes — and why a local repository's working tree is never updated.
+
+Decisions that are easy to undo by accident:
+
+- **`org.eclipse.jgit.transport.sshd` is an *optional* Import-Package** (`bnd.bnd`), and every
+  sshd type lives in `SshdSessionFactoryProvider` — a field type or method signature naming
+  them would make MINA sshd + BouncyCastle mandatory just to *load* the component (#49). The
+  consequence: nothing pulls the SSH stack in transitively any more, so every bndrun that wants
+  `ssh://` must `-runrequires` **`org.eclipse.jgit.ssh.apache`** by name — `required.bndrun`
+  (workspace library), `test.bndrun` and `launch.bndrun` all do. MINA's own BouncyCastle imports
+  are optional too: **`bcpkix`** (+`bcutil`) is needed only for an *encrypted PKCS#8* key
+  (`GitSshTransportTest.testEncryptedPkcs8Key` pins it); OpenSSH-format and classic PEM are
+  parsed by MINA itself. SSH also needs `org.osgi.framework.bootdelegation=javax.*` (jgit's ssh
+  bundle uses `javax.security.auth.*` without importing it) and SPI-Fly + ASM.
+- **`fetch()` never discards local work** (#46): it fetches into `refs/remotes/origin/*` and
+  only fast-forwards the branch; a diverged branch is left alone and logged. `resetToRemote()`
+  is the sole operation that drops local commits, `getRemoteHead()` reads the other side.
+  Do not "simplify" the refspec back to `+refs/heads/*:refs/heads/*`.
+- **A request that changes nothing writes no commit** (#45), unless `CommitRequest.allowEmpty`.
+  `commit()` then returns the *unchanged* head.
+- An **unborn branch is empty, not an error** (#41): `getFiles()` → empty listing with a `null`
+  commit id, reads → `GitFileNotFoundException`, `getLog()` → empty. `getLog()` walks the
+  configured branch, not `HEAD` (the mirror has no `HEAD`).
+- `TreeResult` carries **blob ids** per file (#43) — the per-file content hash for ETags/change
+  detection, free during the tree walk; `exists()`/`blobId()` answer without reading (#44).
+- Exceptions split by *what happened to the data*: `GitWriteException` = nothing was recorded;
+  `GitPushException` = the commit is local and a later `push()` completes it (#50);
+  `GitConflictException` = the head moved, rebuild before sending.
+- Blank config values mean "unset" (#42) — notably `privateKey`, since the shipped config
+  substitutes an env var that is often empty.

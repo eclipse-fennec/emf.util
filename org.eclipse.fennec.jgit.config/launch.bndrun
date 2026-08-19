@@ -39,12 +39,17 @@
 	slf4j.api;version='[2.0.17,2.0.18)',\
 	slf4j.simple;version='[2.0.17,2.0.18)'
 
+# The SSH stack and BouncyCastle are all reached through optional imports - jgit imports
+# org.eclipse.jgit.transport.sshd optionally (issue #49), and MINA sshd imports every
+# BouncyCastle package optionally - so each has to be named here or the resolver leaves it out
+# and this example, which reads over ssh://, cannot authenticate.
 -runrequires: \
 	osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.shell)',\
 	osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.command)',\
 	bnd.identity;id='org.apache.felix.configadmin.plugin.interpolation',\
 	bnd.identity;id=bcpkix,\
 	bnd.identity;id=bcutil,\
+	bnd.identity;id='org.eclipse.jgit.ssh.apache',\
 	bnd.identity;id='org.eclipse.fennec.jgit',\
 	bnd.identity;id='org.eclipse.fennec.jgit.config'
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'

@@ -169,11 +169,48 @@ public class GitCommitWriterTest {
 		assertThatThrownBy(() -> stale.commit(REF,
 				CommitRequest.builder("stale").put("test3", "z".getBytes(StandardCharsets.UTF_8)).build(), AUTHOR))
 				.isInstanceOf(GitConflictException.class) //
-				.hasMessageContaining("fetch and retry");
+				.hasMessageContaining("re-read the head and re-apply");
 
 		// The losing commit left the branch exactly where it was.
 		assertThat(repo.resolve(REF)).isEqualTo(second);
 		assertThat(files()).containsExactlyInAnyOrder("test", "test2");
+	}
+
+	/**
+	 * A request that leaves the tree as it was writes no commit — a commit whose tree
+	 * is its parent's records nothing, but is a new object with a new timestamp, so it
+	 * moves the branch and shows up in a history kept as an audit trail.
+	 */
+	@Test
+	public void testARequestThatChangesNothingWritesNoCommit() throws Exception {
+		ObjectId first = writer.commit(REF,
+				CommitRequest.builder("first").put("test", "x".getBytes(StandardCharsets.UTF_8)).build(), AUTHOR);
+
+		ObjectId sameContent = writer.commit(REF,
+				CommitRequest.builder("same content").put("test", "x".getBytes(StandardCharsets.UTF_8)).build(),
+				AUTHOR);
+		ObjectId absentPath = writer.commit(REF, CommitRequest.builder("delete nothing").delete("absent").build(),
+				AUTHOR);
+
+		assertThat(sameContent).as("rewriting the same content").isEqualTo(first);
+		assertThat(absentPath).as("deleting a path that is not there").isEqualTo(first);
+		assertThat(repo.resolve(REF)).isEqualTo(first);
+	}
+
+	/** A caller that wants the history entry anyway can still have it. */
+	@Test
+	public void testAnEmptyCommitCanBeAskedFor() throws Exception {
+		ObjectId first = writer.commit(REF,
+				CommitRequest.builder("first").put("test", "x".getBytes(StandardCharsets.UTF_8)).build(), AUTHOR);
+
+		ObjectId empty = writer.commit(REF, CommitRequest.builder("mark") //
+				.put("test", "x".getBytes(StandardCharsets.UTF_8)) //
+				.allowEmpty(true) //
+				.build(), AUTHOR);
+
+		assertThat(empty).isNotEqualTo(first);
+		assertThat(parse(empty).getTree()).as("same tree, new commit").isEqualTo(parse(first).getTree());
+		assertThat(parse(empty).getParent(0)).isEqualTo(first);
 	}
 
 	@Test

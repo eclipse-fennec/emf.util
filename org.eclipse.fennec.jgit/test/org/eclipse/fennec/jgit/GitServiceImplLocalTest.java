@@ -16,6 +16,7 @@ package org.eclipse.fennec.jgit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,9 +27,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.eclipse.fennec.jgit.api.CommitRequest;
+import org.eclipse.fennec.jgit.api.FileEntry;
 import org.eclipse.fennec.jgit.api.TreeResult;
 import org.eclipse.fennec.jgit.exceptions.GitFileNotFoundException;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.junit.jupiter.api.AfterEach;
@@ -205,6 +209,72 @@ public class GitServiceImplLocalTest {
 		assertThatThrownBy(() -> service.readLatestFile("tes")).isInstanceOf(GitFileNotFoundException.class);
 	}
 
+	// --- existence and blob ids --------------------------------------------------
+
+	@Test
+	public void testExists() {
+		assertThat(service.exists(null, "test")).isTrue();
+		assertThat(service.exists(null, "models/sensor.ecore")).isTrue();
+		assertThat(service.exists(null, "does/not/exist")).isFalse();
+	}
+
+	/** The same distinctions the read methods make, without reading anything. */
+	@Test
+	public void testWhatDoesNotExist() {
+		assertThat(service.exists(null, "models")).as("a directory is not a file").isFalse();
+		assertThat(service.exists(null, "tes")).as("a prefix of a file is not a file").isFalse();
+
+		service.deleteFile("test", "remove test");
+
+		assertThat(service.exists(null, "test")).as("a deleted file is gone").isFalse();
+		assertThat(service.exists(firstCommit.getName(), "test")).as("but it is still in the older commit").isTrue();
+	}
+
+	/** The blob id is git's own content hash, the one {@code git hash-object} prints. */
+	@Test
+	public void testBlobIdIsTheContentHash() throws Exception {
+		String expected = hashObject(FILE_CONTENT);
+
+		assertThat(service.blobId(null, "test")).contains(expected);
+		assertThat(service.getFiles().getBlobId("test")).isEqualTo(expected);
+		assertThat(service.getFiles().getEntries()) //
+				.extracting(FileEntry::path, FileEntry::blobId) //
+				.contains(tuple("test", expected));
+	}
+
+	@Test
+	public void testBlobIdOfAMissingFileIsEmpty() {
+		assertThat(service.blobId(null, "does/not/exist")).isEmpty();
+		assertThat(service.getFiles().getBlobId("does/not/exist")).isNull();
+	}
+
+	/**
+	 * Why the blob id is worth having: it identifies the content of one file, so it
+	 * survives a commit that touches another one — where the commit id, the only thing
+	 * a caller used to get, changes with every write anywhere in the tree.
+	 */
+	@Test
+	public void testBlobIdIsUnchangedByACommitElsewhere() {
+		String before = service.getFiles().getBlobId("test");
+		String commitBefore = service.getFiles().getCommitId();
+
+		service.writeFile("unrelated.txt", "x".getBytes(StandardCharsets.UTF_8), "unrelated");
+
+		assertThat(service.getFiles().getCommitId()).isNotEqualTo(commitBefore);
+		assertThat(service.getFiles().getBlobId("test")).isEqualTo(before);
+	}
+
+	@Test
+	public void testBlobIdFollowsTheContent() {
+		String before = service.getFiles().getBlobId("test");
+
+		service.writeFile("test", "changed".getBytes(StandardCharsets.UTF_8), "change test");
+
+		assertThat(service.getFiles().getBlobId("test")).isNotEqualTo(before) //
+				.isEqualTo(hashObject("changed"));
+		assertThat(service.blobId(firstCommit.getName(), "test")).contains(before);
+	}
+
 	@Test
 	public void testFetchOnALocalRepositoryIsANoop() {
 		// No remote to fetch from; the call must not fail, so callers need not know which
@@ -327,6 +397,45 @@ public class GitServiceImplLocalTest {
 		assertThat(service.getFiles().getFiles()).contains("local.txt");
 	}
 
+	/**
+	 * An idempotent write is not a change, and a history kept as an audit trail should
+	 * not fill up with entries that record nothing.
+	 */
+	@Test
+	public void testWritingTheSameContentAgainWritesNoCommit() throws Exception {
+		String first = service.writeFile("same.txt", "x".getBytes(StandardCharsets.UTF_8), "add same");
+
+		String second = service.writeFile("same.txt", "x".getBytes(StandardCharsets.UTF_8), "add same again");
+
+		assertThat(second).isEqualTo(first);
+		assertThat(service.getFiles().getCommitId()).isEqualTo(first);
+		assertThat(service.getLog()).extracting(RevCommit::getFullMessage).containsExactly("add same", "initial");
+	}
+
+	@Test
+	public void testDeletingAnAbsentFileWritesNoCommit() throws Exception {
+		String head = service.getFiles().getCommitId();
+
+		String result = service.deleteFile("never/was/there", "remove nothing");
+
+		assertThat(result).isEqualTo(head);
+		assertThat(service.getLog()).extracting(RevCommit::getFullMessage).containsExactly("initial");
+	}
+
+	/** A caller that wants the entry anyway can still have it. */
+	@Test
+	public void testAnEmptyCommitCanBeAskedFor() throws Exception {
+		String head = service.getFiles().getCommitId();
+
+		String marked = service.commit(CommitRequest.builder("mark") //
+				.put("test", FILE_CONTENT.getBytes(StandardCharsets.UTF_8)) //
+				.allowEmpty(true) //
+				.build());
+
+		assertThat(marked).isNotEqualTo(head);
+		assertThat(service.getLog()).extracting(RevCommit::getFullMessage).containsExactly("mark", "initial");
+	}
+
 	@Test
 	public void testCommitWithoutARequestIsRejected() {
 		assertThatThrownBy(() -> service.commit(null)).isInstanceOf(NullPointerException.class);
@@ -334,6 +443,13 @@ public class GitServiceImplLocalTest {
 
 	private RevCommit head() throws Exception {
 		return service.getLog().iterator().next();
+	}
+
+	/** What {@code git hash-object} would print for that content. */
+	private String hashObject(String content) {
+		try (ObjectInserter inserter = origin.getRepository().newObjectInserter()) {
+			return inserter.idFor(Constants.OBJ_BLOB, content.getBytes(StandardCharsets.UTF_8)).getName();
+		}
 	}
 
 	private String read(String path) throws IOException {

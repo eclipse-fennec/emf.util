@@ -15,6 +15,8 @@
 package org.eclipse.fennec.jgit;
 
 import java.io.IOException;
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 
 import org.eclipse.fennec.jgit.api.CommitRequest;
 import org.eclipse.fennec.jgit.api.CommitRequest.Change;
@@ -54,6 +56,8 @@ import org.eclipse.jgit.revwalk.RevWalk;
  */
 class GitCommitWriter {
 
+	private static final Logger logger = System.getLogger(GitCommitWriter.class.getName());
+
 	private final Repository repo;
 
 	GitCommitWriter(Repository repo) {
@@ -66,7 +70,8 @@ class GitCommitWriter {
 	 * @param ref     the fully qualified ref to move, e.g. {@code refs/heads/main}
 	 * @param request the changes to apply
 	 * @param author  the author and committer to record
-	 * @return the id of the new commit
+	 * @return the id of the new commit, or the unchanged head if the request changed
+	 *         nothing and did not ask for an empty commit
 	 */
 	ObjectId commit(String ref, CommitRequest request, PersonIdent author) {
 		try {
@@ -77,6 +82,15 @@ class GitCommitWriter {
 				DirCache index = readTree(parent);
 				applyChanges(index, request, inserter);
 				ObjectId treeId = index.writeTree(inserter);
+				if (isUnchanged(parent, treeId, request)) {
+					// Nothing to record: a delete of an absent path, or content that is already
+					// stored. Committing anyway would move the branch and add a history entry
+					// describing no change at all, and the blobs inserted above are simply not
+					// flushed.
+					logger.log(Level.INFO, "No change in {0} change(s) for {1}, leaving {2} in place",
+							request.getChanges().size(), ref, oldHead.getName());
+					return oldHead;
+				}
 
 				CommitBuilder commitBuilder = new CommitBuilder();
 				commitBuilder.setTreeId(treeId);
@@ -97,6 +111,15 @@ class GitCommitWriter {
 		} catch (Exception e) {
 			throw new GitWriteException("Unable to commit to " + ref, e);
 		}
+	}
+
+	/**
+	 * Whether the request left the tree as it was. Only decidable against a parent:
+	 * the very first commit of a repository has no tree to compare with, and is
+	 * written even when it is empty.
+	 */
+	private boolean isUnchanged(RevCommit parent, ObjectId treeId, CommitRequest request) {
+		return parent != null && !request.isAllowEmpty() && treeId.equals(parent.getTree());
 	}
 
 	/**
@@ -170,8 +193,11 @@ class GitCommitWriter {
 		case LOCK_FAILURE:
 		case REJECTED:
 		case REJECTED_CURRENT_BRANCH:
-			throw new GitConflictException(
-					ref + " moved while the commit was being built (" + result + "), fetch and retry");
+			// A local race, not a stale mirror: re-reading the head and re-applying the
+			// changes is the way out. Fetching is not - it would not help, and it is not the
+			// operation that put the ref where it now is.
+			throw new GitConflictException(ref + " moved while the commit was being built (" + result
+					+ "); re-read the head and re-apply the changes");
 		default:
 			throw new GitWriteException("Unable to update " + ref + ": " + result);
 		}

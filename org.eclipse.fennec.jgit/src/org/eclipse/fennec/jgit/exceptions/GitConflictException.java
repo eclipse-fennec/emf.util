@@ -22,9 +22,15 @@ import org.eclipse.fennec.jgit.api.GitService;
  * rejected the push as non-fast-forward because it has commits this repository
  * does not know about.
  * <p>
- * The caller is expected to {@link GitService#fetch() fetch}, rebuild its change
- * on top of the new head and retry. The service does not retry on its own,
- * because only the caller can decide how to merge conflicting content.
+ * The caller is expected to {@link GitService#fetch() fetch}, reconcile its content
+ * against what the remote has (readable at {@link GitService#getRemoteHead()}),
+ * {@link GitService#resetToRemote() reset} and re-apply the change on top. The
+ * service does not do any of that on its own, because only the caller can decide how
+ * to merge conflicting content.
+ * <p>
+ * Like {@link GitPushException}, a conflict on push leaves the commit in place
+ * locally; unlike it, the commit cannot simply be sent again — the head it was built
+ * on is no longer the remote's.
  */
 public class GitConflictException extends GitWriteException {
 

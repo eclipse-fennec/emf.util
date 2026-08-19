@@ -16,6 +16,7 @@ package org.eclipse.fennec.jgit;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,10 +27,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.ListBranchCommand.ListMode;
 import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.TransportCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -39,6 +42,8 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.RefUpdate;
+import org.eclipse.jgit.lib.RefUpdate.Result;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
@@ -48,22 +53,20 @@ import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.RemoteRefUpdate;
+import org.eclipse.jgit.transport.SshSessionFactory;
 import org.eclipse.jgit.transport.SshTransport;
-import org.eclipse.jgit.transport.URIish;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
-import org.eclipse.jgit.transport.sshd.JGitKeyCache;
-import org.eclipse.jgit.transport.sshd.KeyPasswordProvider;
-import org.eclipse.jgit.transport.sshd.SshdSessionFactory;
-import org.eclipse.jgit.transport.sshd.SshdSessionFactoryBuilder;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
 import org.eclipse.jgit.util.FS;
 import org.eclipse.fennec.jgit.api.CommitRequest;
+import org.eclipse.fennec.jgit.api.FileEntry;
 import org.eclipse.fennec.jgit.api.GitConfig;
 import org.eclipse.fennec.jgit.api.GitService;
 import org.eclipse.fennec.jgit.api.TreeResult;
 import org.eclipse.fennec.jgit.exceptions.GitConflictException;
 import org.eclipse.fennec.jgit.exceptions.GitFileNotFoundException;
+import org.eclipse.fennec.jgit.exceptions.GitPushException;
 import org.eclipse.fennec.jgit.exceptions.GitWriteException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -74,37 +77,26 @@ import org.osgi.service.metatype.annotations.Designate;
 @Component(configurationPid = "GitConfig", configurationPolicy = ConfigurationPolicy.REQUIRE, immediate = true)
 @Designate(ocd = GitConfig.class, factory = true)
 public class GitServiceImpl implements GitService{
-	/**
-	 * Supplies the configured passphrase to the Apache MINA sshd backend when it
-	 * loads an encrypted private key. A single fixed passphrase is configured, so
-	 * a failed load is never retried (that would only reuse the same passphrase).
-	 */
-	private final class ConfiguredKeyPasswordProvider implements KeyPasswordProvider {
-
-		@Override
-		public char[] getPassphrase(URIish uri, int attempt) {
-			String passphrase = config.privateKeyPassphrase();
-			return passphrase == null ? new char[0] : passphrase.toCharArray();
-		}
-
-		@Override
-		public void setAttempts(int maxNumberOfAttempts) {
-			// Only the single configured passphrase is available; retries make no sense.
-		}
-
-		@Override
-		public boolean keyLoaded(URIish uri, int attempt, Exception error) {
-			// Never retry: either the configured passphrase worked or the load fails.
-			return false;
-		}
-	}
-
 	private static final Logger logger = System.getLogger(GitService.class.getName());
+	/**
+	 * Where a fetch puts the remote's branches. The remote is configured as a URL,
+	 * not as a named remote, so there is exactly one and it is called "origin".
+	 */
+	private static final String REMOTE_PREFIX = "refs/remotes/origin/";
+
 	private GitConfig config;
 	private Repository repo;
 	private Git git;
 	private FetchCommand fetchCmd;
-	private SshdSessionFactory sshSessionFactory;
+	/**
+	 * Declared as the core jgit type on purpose: a field type is resolved when the
+	 * class is loaded, so naming {@code SshdSessionFactory} here would make
+	 * {@code org.eclipse.jgit.ssh.apache} — and the Apache MINA sshd stack behind it
+	 * — mandatory for every consumer, including one that only ever opens a
+	 * repository on disk. The sshd types live in {@link SshdSessionFactoryProvider},
+	 * which is not loaded until a configured key makes it necessary.
+	 */
+	private SshSessionFactory sshSessionFactory;
 	private CredentialsProvider credentialsProvider;
 	private GitCommitWriter writer;
 	/** Serializes everything that moves the branch or talks to the remote. */
@@ -124,13 +116,18 @@ public class GitServiceImpl implements GitService{
 			// Local on-disk repos already carry their objects, so they are not fetched.
 			fetchCmd = git.fetch();
 			fetchCmd.setRemote(config.repo());
-			fetchCmd.setRefSpecs(new RefSpec("+refs/heads/*:refs/heads/*"));
+			// Into remote-tracking refs, never straight onto the local branches: a fetch that
+			// force-writes refs/heads/* discards every commit that has not been pushed yet.
+			fetchCmd.setRefSpecs(new RefSpec("+refs/heads/*:" + REMOTE_PREFIX + "*"));
 			// Only build the SSH backend when a private key is configured; anonymous git:// and
 			// https:// remotes need no SSH stack at all. The backend is the Apache MINA sshd
 			// session factory, which (unlike the legacy JSch one) parses OpenSSH-format and
 			// ed25519 keys. It is only attached to actual SshTransports.
-			if (config.privateKey() != null) {
-				sshSessionFactory = createSshSessionFactory();
+			// Blank counts as "no key": the shipped example configuration reads the path from
+			// an environment variable and leaves it empty when that is unset, and an empty
+			// identity path would be offered to every SSH transport.
+			if (config.privateKey() != null && !config.privateKey().isBlank()) {
+				sshSessionFactory = buildSshSessionFactory();
 			}
 			// https remotes authenticate with user name and token instead. Reading a public repo
 			// needs no credentials, pushing to it does.
@@ -140,6 +137,7 @@ public class GitServiceImpl implements GitService{
 			}
 			configureTransport(fetchCmd);
 			fetchCmd.call();
+			syncBranchWithRemote();
 		} else {
 			FileRepositoryBuilder builder = new FileRepositoryBuilder();
 			File gitDir = new File(config.repo());
@@ -151,6 +149,21 @@ public class GitServiceImpl implements GitService{
 		}
 		repo.getObjectDatabase();
 		writer = new GitCommitWriter(repo);
+	}
+
+	/**
+	 * Builds the SSH backend, turning the absence of the optional SSH bundles into an
+	 * explanation instead of a {@code NoClassDefFoundError} from somewhere inside the
+	 * activation.
+	 */
+	private SshSessionFactory buildSshSessionFactory() {
+		try {
+			return SshdSessionFactoryProvider.create(config);
+		} catch (LinkageError e) {
+			throw new IllegalStateException("privateKey is configured for " + config.repo()
+					+ ", but the SSH stack is not available: org.eclipse.jgit.ssh.apache and Apache MINA sshd"
+					+ " have to be present to authenticate with a key", e);
+		}
 	}
 
 	/**
@@ -169,6 +182,15 @@ public class GitServiceImpl implements GitService{
 		if (credentialsProvider != null) {
 			command.setCredentialsProvider(credentialsProvider);
 		}
+	}
+
+	/**
+	 * The SSH backend, or {@code null} when none was built because no private key is
+	 * configured. Visible so a test can assert which of the two happened without
+	 * reaching for a real SSH server.
+	 */
+	SshSessionFactory sshSessionFactory() {
+		return sshSessionFactory;
 	}
 
 	@Override
@@ -193,10 +215,121 @@ public class GitServiceImpl implements GitService{
 			logger.log(Level.INFO, "Skipping fetch for local repo {0}", config.repo());
 			return;
 		}
+		synchronized (writeLock) {
+			try {
+				fetchCmd.call();
+				syncBranchWithRemote();
+			} catch (Exception e) {
+				throw new RuntimeException("Fetch failed for " + config.repo(), e);
+			}
+		}
+	}
+
+	/**
+	 * Lets the configured branch follow what was just fetched, as far as that can be
+	 * done without losing anything: it is created if it does not exist yet and
+	 * fast-forwarded while the remote is ahead of it. A branch that carries local
+	 * commits the remote does not have has diverged, and is left where it is —
+	 * moving it is {@link #resetToRemote()}, which says so in its name.
+	 */
+	private void syncBranchWithRemote() throws IOException {
+		ObjectId remoteHead = repo.resolve(remoteRef());
+		if (remoteHead == null) {
+			logger.log(Level.INFO, "{0} has no branch {1} yet", config.repo(), config.branch());
+			return;
+		}
+		ObjectId localHead = repo.resolve(getRef());
+		if (remoteHead.equals(localHead)) {
+			return;
+		}
+		if (localHead != null && !isAncestor(localHead, remoteHead)) {
+			logger.log(Level.WARNING,
+					"{0} has moved on and {1} carries commits that are not on it; leaving the branch at {2}."
+							+ " Reconcile against getRemoteHead() and call resetToRemote() to take the remote''s side",
+					config.repo(), getRef(), localHead.getName());
+			return;
+		}
+		moveBranchTo(remoteHead, localHead, localHead == null ? "fetch: created" : "fetch: fast-forward");
+	}
+
+	/**
+	 * Whether the remote's head builds on the local one, i.e. the local branch can
+	 * be fast-forwarded onto it without dropping a commit.
+	 */
+	private boolean isAncestor(ObjectId localHead, ObjectId remoteHead) throws IOException {
+		try (RevWalk revWalk = new RevWalk(repo)) {
+			return revWalk.isMergedInto(revWalk.parseCommit(localHead), revWalk.parseCommit(remoteHead));
+		}
+	}
+
+	private void moveBranchTo(ObjectId target, ObjectId previous, String reflogMessage) throws IOException {
+		RefUpdate refUpdate = repo.updateRef(getRef());
+		refUpdate.setNewObjectId(target);
+		refUpdate.setForceUpdate(true);
+		refUpdate.setRefLogMessage(reflogMessage, false);
+		Result result = refUpdate.update();
+		switch (result) {
+		case NEW:
+		case FAST_FORWARD:
+		case FORCED:
+		case NO_CHANGE:
+			logger.log(Level.INFO, "{0} now at {1} ({2}, was {3})", getRef(), target.getName(), result,
+					previous == null ? "unborn" : previous.getName());
+			return;
+		default:
+			throw new GitWriteException("Unable to move " + getRef() + " to " + target.getName() + ": " + result);
+		}
+	}
+
+	private String remoteRef() {
+		return REMOTE_PREFIX + config.branch();
+	}
+
+	@Override
+	public String getRemoteHead() {
+		if (fetchCmd == null) {
+			// Local on-disk repo: there is no remote whose head could be reported.
+			return null;
+		}
 		try {
-			fetchCmd.call();
-		} catch (Exception e) {
-			throw new RuntimeException("Fetch failed for " + config.repo(), e);
+			ObjectId remoteHead = repo.resolve(remoteRef());
+			return remoteHead == null ? null : remoteHead.getName();
+		} catch (IOException e) {
+			throw new RuntimeException("Unable to read " + remoteRef(), e);
+		}
+	}
+
+	@Override
+	public String resetToRemote() {
+		synchronized (writeLock) {
+			if (fetchCmd == null) {
+				// Local on-disk repo: no remote to reset to, the branch is already the truth.
+				logger.log(Level.INFO, "Skipping reset for local repo {0}", config.repo());
+				return headId();
+			}
+			try {
+				ObjectId remoteHead = repo.resolve(remoteRef());
+				if (remoteHead == null) {
+					throw new GitWriteException(
+							remoteRef() + " is unknown; fetch() before resetting to the remote");
+				}
+				moveBranchTo(remoteHead, repo.resolve(getRef()), "reset: to " + remoteRef());
+				return remoteHead.getName();
+			} catch (GitWriteException e) {
+				throw e;
+			} catch (IOException e) {
+				throw new GitWriteException("Unable to reset " + getRef() + " to " + remoteRef(), e);
+			}
+		}
+	}
+
+	/** The commit the configured branch points at, or {@code null} if it has none. */
+	private String headId() {
+		try {
+			ObjectId head = repo.resolve(getRef());
+			return head == null ? null : head.getName();
+		} catch (IOException e) {
+			throw new RuntimeException("Unable to read " + getRef(), e);
 		}
 	}
 	
@@ -211,42 +344,16 @@ public class GitServiceImpl implements GitService{
 				|| repo.startsWith("https://");
 	}
 
-	/**
-	 * Builds an Apache MINA sshd session factory that authenticates with exactly the
-	 * configured private key. The key is supplied as a lazily-loaded identity path (so
-	 * OpenSSH-format and ed25519 keys are parsed by MINA/BouncyCastle), and its passphrase
-	 * comes from {@link ConfiguredKeyPasswordProvider}. Host-key verification and the
-	 * default known-hosts location (~/.ssh) are left at MINA's defaults.
-	 */
-	private SshdSessionFactory createSshSessionFactory() {
-		File keyFile = new File(config.privateKey());
-		// SshdSessionFactoryBuilder does not default the home directory; build() NPEs on a null
-		// one. Use the process user's home (and its .ssh), falling back when user.home is unset
-		// (e.g. a bare OSGi launcher). It must be absolute.
-		String userHome = System.getProperty("user.home");
-		File homeDir = (userHome == null || userHome.isBlank())
-				? new File(System.getProperty("java.io.tmpdir")).getAbsoluteFile()
-				: new File(userHome);
-		SshdSessionFactoryBuilder builder = new SshdSessionFactoryBuilder() //
-				.setPreferredAuthentications("publickey") //
-				.setHomeDirectory(homeDir) //
-				.setSshDirectory(new File(homeDir, ".ssh")) //
-				.setDefaultIdentities(sshDir -> List.of(keyFile.toPath())) //
-				.setKeyPasswordProvider(cp -> new ConfiguredKeyPasswordProvider());
-		// Verify the server host key against the configured known_hosts file; when none is
-		// configured, MINA falls back to its default (~/.ssh/known_hosts).
-		String knownHosts = config.knownHosts();
-		if (knownHosts != null && !knownHosts.isBlank()) {
-			File knownHostsFile = new File(knownHosts);
-			builder.setDefaultKnownHostsFiles(sshDir -> List.of(knownHostsFile.toPath()));
-		}
-		return builder.build(new JGitKeyCache());
-	}
-
 	@Deactivate
 	public void deactivate() {
-		if (sshSessionFactory != null) {
-			sshSessionFactory.close();
+		// SshdSessionFactory is Closeable, SshSessionFactory is not - and naming the former
+		// here would put the SSH stack back into the class's own resolution.
+		if (sshSessionFactory instanceof Closeable closeable) {
+			try {
+				closeable.close();
+			} catch (IOException e) {
+				logger.log(Level.WARNING, () -> "Unable to close the SSH session factory", e);
+			}
 		}
 		if (repo != null) {
 			repo.close();
@@ -260,10 +367,14 @@ public class GitServiceImpl implements GitService{
 	
 	@Override
 	public TreeResult getFiles(String basepath)  {
-		String branch = config.branch();
-		ObjectId lastCommitId;
 		try {
-			lastCommitId = repo.resolve("refs/heads/" + branch);
+			ObjectId lastCommitId = repo.resolve(getRef());
+			if (lastCommitId == null) {
+				// A branch without commits is empty, not broken: a repository that was just
+				// created is in exactly that state, and listing it must not fail.
+				logger.log(Level.DEBUG, "{0} has no commits yet, listing nothing", getRef());
+				return TreeResult.of(null, List.of());
+			}
 			try (RevWalk revWalk = new RevWalk(repo); TreeWalk treeWalk = new TreeWalk(repo)) {
 				RevCommit commit = revWalk.parseCommit(lastCommitId);
 				RevTree tree = commit.getTree();
@@ -272,11 +383,13 @@ public class GitServiceImpl implements GitService{
 				if(basepath != null) {
 					treeWalk.setFilter(PathFilter.create(basepath));
 				}
-				List<String> files = new ArrayList<>();
+				List<FileEntry> files = new ArrayList<>();
 				while(treeWalk.next()) {
-					files.add(treeWalk.getPathString());
+					// The blob id is right there in the walk, and it is the only per-file content
+					// hash a caller can get without reading the whole file back.
+					files.add(new FileEntry(treeWalk.getPathString(), treeWalk.getObjectId(0).getName()));
 				}
-				return new TreeResult(ObjectId.toString(lastCommitId), files);
+				return TreeResult.of(ObjectId.toString(lastCommitId), files);
 			}
 		} catch (Exception e) {
 			throw new RuntimeException("Unable to list files for basepath " + basepath, e);
@@ -308,11 +421,45 @@ public class GitServiceImpl implements GitService{
 
 	@Override
 	public void loadFile(String commitId, String file, OutputStream out) {
-		String branch = config.branch();
-		ObjectId theCommitId;
+		ObjectId blob = findBlob(commitId, file).orElseThrow(() -> new GitFileNotFoundException(
+				file + " does not exist in " + (commitId == null ? getRef() : commitId)));
 		try {
-			if(commitId == null) {
-				theCommitId = repo.resolve("refs/heads/" + branch);
+			ObjectLoader loader = repo.open(blob);
+			loader.copyTo(out);
+		} catch (Exception e) {
+			throw new RuntimeException("Unable to load file " + file, e);
+		}
+	}
+
+	@Override
+	public boolean exists(String commitId, String file) {
+		return findBlob(commitId, file).isPresent();
+	}
+
+	@Override
+	public Optional<String> blobId(String commitId, String file) {
+		return findBlob(commitId, file).map(ObjectId::getName);
+	}
+
+	/**
+	 * Looks a single path up in the tree of a commit, without reading the content.
+	 * This is what {@link #exists(String, String)} and
+	 * {@link #blobId(String, String)} answer with, and what a read starts from.
+	 *
+	 * @param commitId the commit to look in, or {@code null} for the branch head
+	 * @return the id of the blob at that path, or empty if there is none there —
+	 *         including when the branch has no commits yet
+	 */
+	private Optional<ObjectId> findBlob(String commitId, String file) {
+		Objects.requireNonNull(file, "file");
+		try {
+			ObjectId theCommitId;
+			if (commitId == null) {
+				theCommitId = repo.resolve(getRef());
+				if (theCommitId == null) {
+					// No commits on the branch yet: nothing is in it, which is not an error.
+					return Optional.empty();
+				}
 			} else {
 				theCommitId = ObjectId.fromString(commitId);
 			}
@@ -326,26 +473,24 @@ public class GitServiceImpl implements GitService{
 				// exact hit is the file that was asked for.
 				while (treeWalk.next()) {
 					if (file.equals(treeWalk.getPathString())) {
-						ObjectId objectId = treeWalk.getObjectId(0);
-						ObjectLoader loader = repo.open(objectId);
-						loader.copyTo(out);
-						return;
+						return Optional.of(treeWalk.getObjectId(0));
 					}
 				}
-				throw new GitFileNotFoundException(
-						file + " does not exist in " + (commitId == null ? getRef() : commitId));
+				return Optional.empty();
 			}
-		} catch (GitFileNotFoundException e) {
-			throw e;
 		} catch (Exception e) {
-			throw new RuntimeException("Unable to load file " + file, e);
+			throw new RuntimeException("Unable to look up file " + file, e);
 		}
 	}
 	
 	@Override
 	public List<String> getBranches() {
 		try {
-			List<Ref> branches = git.branchList().call();
+			// A mirror keeps the remote's branches as remote-tracking refs and has a local one
+			// only for the configured branch, so listing both is what shows the remote's.
+			List<Ref> branches = git.branchList() //
+					.setListMode(fetchCmd == null ? null : ListMode.ALL) //
+					.call();
 			return branches.stream().map(Ref::getName).collect(Collectors.toList());
 		} catch (GitAPIException e) {
 			logger.log(Level.ERROR, () -> "Error getting branch list.", e);
@@ -355,17 +500,41 @@ public class GitServiceImpl implements GitService{
 
 	@Override
 	public Iterable<RevCommit> getLog() throws GitAPIException {
-		return git.log().call();
-
+		ObjectId head;
+		try {
+			head = repo.resolve(getRef());
+		} catch (IOException e) {
+			throw new RuntimeException("Unable to read " + getRef(), e);
+		}
+		if (head == null) {
+			// A branch without commits has an empty history, which is not the same as an
+			// error - the branch simply has not been written to yet.
+			return List.of();
+		}
+		try {
+			// Walk the configured branch, not HEAD: the in-memory mirror of a remote has no
+			// HEAD at all (log() would fail with NoHeadException), and a repository on disk
+			// may have a different branch checked out than the one this service was
+			// configured for.
+			return git.log().add(head).call();
+		} catch (IOException e) {
+			throw new RuntimeException("Unable to read the history of " + getRef(), e);
+		}
 	}
 
 	@Override
 	public String commit(CommitRequest request) {
 		Objects.requireNonNull(request, "request");
 		synchronized (writeLock) {
+			String before = headId();
 			ObjectId commitId = writer.commit(getRef(), request, author(request));
-			logger.log(Level.INFO, "Committed {0} change(s) as {1} on {2}", request.getChanges().size(),
-					commitId.getName(), getRef());
+			if (commitId.getName().equals(before)) {
+				logger.log(Level.INFO, "{0} change(s) left {1} unchanged at {2}", request.getChanges().size(),
+						getRef(), before);
+			} else {
+				logger.log(Level.INFO, "Committed {0} change(s) as {1} on {2}", request.getChanges().size(),
+						commitId.getName(), getRef());
+			}
 			if (shouldPush(request)) {
 				pushInternal();
 			}
@@ -429,7 +598,9 @@ public class GitServiceImpl implements GitService{
 		} catch (GitWriteException e) {
 			throw e;
 		} catch (Exception e) {
-			throw new GitWriteException("Push failed for " + config.repo(), e);
+			// The commit itself is already written and on the branch; only the copy to the
+			// remote failed, which a later push() can still complete.
+			throw new GitPushException("Push failed for " + config.repo(), e);
 		}
 	}
 
@@ -444,9 +615,10 @@ public class GitServiceImpl implements GitService{
 			return;
 		case REJECTED_NONFASTFORWARD:
 			throw new GitConflictException(config.repo() + " rejected " + update.getRemoteName()
-					+ " as non-fast-forward, fetch and retry");
+					+ " as non-fast-forward: it carries commits this repository does not have."
+					+ " fetch(), reconcile against getRemoteHead(), then resetToRemote() and re-apply the changes");
 		default:
-			throw new GitWriteException("Push of " + update.getRemoteName() + " to " + config.repo() + " failed: "
+			throw new GitPushException("Push of " + update.getRemoteName() + " to " + config.repo() + " failed: "
 					+ update.getStatus() + (update.getMessage() == null ? "" : " - " + update.getMessage()));
 		}
 	}

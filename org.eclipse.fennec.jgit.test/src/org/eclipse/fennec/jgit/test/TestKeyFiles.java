@@ -22,7 +22,15 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.SecureRandom;
 import java.util.Base64;
+
+import javax.crypto.Cipher;
+import javax.crypto.EncryptedPrivateKeyInfo;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.PBEParameterSpec;
 
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyEncryptionContext;
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter;
@@ -94,6 +102,37 @@ final class TestKeyFiles {
 		String pem = "-----BEGIN RSA PRIVATE KEY-----\n"
 				+ Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(pkcs1)
 				+ "\n-----END RSA PRIVATE KEY-----\n";
+		Path file = keyFile();
+		Files.write(file, pem.getBytes(StandardCharsets.UTF_8));
+		return file;
+	}
+
+	/**
+	 * Writes an RSA key as an encrypted PKCS#8 PEM ({@code BEGIN ENCRYPTED PRIVATE KEY}) -
+	 * the one format MINA does <em>not</em> parse itself. It hands the blob to
+	 * BouncyCastle's PKCS#8 decryptor, which lives in {@code bcpkix}, so this is what makes
+	 * that bundle a real runtime requirement rather than a precaution.
+	 * <p>
+	 * Written with the JDK alone, so nothing here depends on what is being tested. The
+	 * algorithm is PKCS#5 v1.5 rather than something modern because
+	 * {@link EncryptedPrivateKeyInfo} can only wrap parameters whose name the JDK maps to an
+	 * OID, which rules out the PBES2 names - the key is a throwaway that authenticates to an
+	 * in-process server for the length of one test, so the weak KDF costs nothing.
+	 */
+	static Path writeEncryptedPkcs8(KeyPair keyPair, String passphrase) throws Exception {
+		byte[] salt = new byte[8];
+		SecureRandom.getInstanceStrong().nextBytes(salt);
+		String algorithm = "PBEWithMD5AndDES";
+		SecretKey secret = SecretKeyFactory.getInstance(algorithm) //
+				.generateSecret(new PBEKeySpec(passphrase.toCharArray()));
+		Cipher cipher = Cipher.getInstance(algorithm);
+		cipher.init(Cipher.ENCRYPT_MODE, secret, new PBEParameterSpec(salt, 100_000));
+		byte[] encrypted = cipher.doFinal(keyPair.getPrivate().getEncoded());
+		byte[] der = new EncryptedPrivateKeyInfo(cipher.getParameters(), encrypted).getEncoded();
+
+		String pem = "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
+				+ Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(der)
+				+ "\n-----END ENCRYPTED PRIVATE KEY-----\n";
 		Path file = keyFile();
 		Files.write(file, pem.getBytes(StandardCharsets.UTF_8));
 		return file;
