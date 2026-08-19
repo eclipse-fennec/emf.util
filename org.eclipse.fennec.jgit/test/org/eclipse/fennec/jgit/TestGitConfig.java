@@ -58,6 +58,16 @@ class TestGitConfig implements GitConfig {
 		return this;
 	}
 
+	TestGitConfig privateKey(String privateKey) {
+		this.privateKey = privateKey;
+		return this;
+	}
+
+	TestGitConfig privateKeyPassphrase(String privateKeyPassphrase) {
+		this.privateKeyPassphrase = privateKeyPassphrase;
+		return this;
+	}
+
 	TestGitConfig credentials(String username, String password) {
 		this.username = username;
 		this.password = password;

@@ -24,15 +24,27 @@ public @interface GitConfig {
 
 	String branch() default "main";
 
-	String privateKey();
+	/**
+	 * Path to the SSH private key authenticating against an SSH remote. Empty means
+	 * no key: the SSH stack is then not built at all, which is what an anonymous
+	 * {@code git://}, an {@code http(s)://} or an on-disk repository wants.
+	 */
+	@AttributeDefinition(required = false)
+	String privateKey() default "";
 
-	String privateKeyPassphrase();
+	/**
+	 * Passphrase of {@link #privateKey()}, if it is encrypted. Empty means the key
+	 * is not encrypted.
+	 */
+	@AttributeDefinition(required = false)
+	String privateKeyPassphrase() default "";
 
 	/**
 	 * Path to an OpenSSH {@code known_hosts} file used to verify the SSH server's
 	 * host key. When empty, the Apache MINA sshd backend falls back to its default
 	 * location ({@code ~/.ssh/known_hosts}). Only relevant for SSH remotes.
 	 */
+	@AttributeDefinition(required = false)
 	String knownHosts() default "";
 
 	/**
@@ -60,6 +72,7 @@ public @interface GitConfig {
 	 * User name for a remote over https. Not used for SSH remotes, which
 	 * authenticate with {@link #privateKey()}.
 	 */
+	@AttributeDefinition(required = false)
 	String username() default "";
 
 	/**

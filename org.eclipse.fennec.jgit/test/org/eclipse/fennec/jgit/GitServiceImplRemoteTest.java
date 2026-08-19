@@ -26,10 +26,14 @@ import java.nio.file.Path;
 
 import org.eclipse.fennec.jgit.api.CommitRequest;
 import org.eclipse.fennec.jgit.exceptions.GitConflictException;
+import org.eclipse.fennec.jgit.exceptions.GitFileNotFoundException;
+import org.eclipse.fennec.jgit.exceptions.GitPushException;
+import org.eclipse.fennec.jgit.exceptions.GitWriteException;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
+import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.transport.Daemon;
 import org.eclipse.jgit.transport.DaemonService;
 import org.junit.jupiter.api.AfterEach;
@@ -112,6 +116,16 @@ public class GitServiceImplRemoteTest {
 		assertThat(read("test")).isEqualTo(FILE_CONTENT);
 	}
 
+	/**
+	 * The mirror has no {@code HEAD} — nothing checks anything out in it — so a history
+	 * read has to start from the configured branch rather than from where the repository
+	 * thinks it is standing.
+	 */
+	@Test
+	public void testGetLogOnTheMirror() throws Exception {
+		assertThat(service.getLog()).extracting(RevCommit::getFullMessage).containsExactly("initial");
+	}
+
 	@Test
 	public void testFetchPicksUpNewRemoteCommits() throws Exception {
 		commitOnRemote("added.txt", "added");
@@ -122,6 +136,26 @@ public class GitServiceImplRemoteTest {
 
 		assertThat(service.getFiles().getFiles()).containsExactlyInAnyOrder("test", "added.txt");
 		assertThat(read("added.txt")).isEqualTo("added");
+	}
+
+	/**
+	 * The shipped example configuration reads the key path from an environment
+	 * variable and leaves it empty when that is unset, so a blank path is the normal
+	 * case for an anonymous or https remote — and must not be offered to the SSH stack
+	 * as an identity.
+	 */
+	@Test
+	public void testABlankPrivateKeyIsNoKey() throws Exception {
+		service.deactivate();
+		service = new GitServiceImpl();
+
+		service.activate(new TestGitConfig(url).privateKey("").privateKeyPassphrase(""));
+
+		// Not merely unused: Apache MINA sshd is not even on this test's class path, so a
+		// backend would fail to build here. The configured-key case is covered end to end by
+		// the OSGi integration test GitSshTransportTest.
+		assertThat(service.sshSessionFactory()).as("no SSH backend for a blank key").isNull();
+		assertThat(service.getFiles().getFiles()).containsExactly("test");
 	}
 
 	// --- writing -----------------------------------------------------------------
@@ -201,6 +235,39 @@ public class GitServiceImplRemoteTest {
 		assertThat(remoteHead()).isEqualTo(afterFirstPush);
 	}
 
+	/**
+	 * A commit that was written but could not be sent is not the same failure as a
+	 * commit that was never written: the change is recorded and pushing again would
+	 * complete it, so a caller can retry cheaply instead of redoing the work — which
+	 * it can only decide if the exception says which of the two happened.
+	 */
+	@Test
+	public void testAFailedPushAfterACommitIsAPushFailure() throws Exception {
+		daemon.stop(); // the remote goes away between the commit and the push
+
+		assertThatThrownBy(() -> service.commit(CommitRequest.builder("unsendable") //
+				.put("mine.txt", "mine".getBytes(StandardCharsets.UTF_8)) //
+				.push(true) //
+				.build())) //
+				.isInstanceOf(GitPushException.class) //
+				.isInstanceOf(GitWriteException.class); // the old catch blocks still catch it
+
+		// The commit survived; only the copy to the remote did not happen.
+		assertThat(read("mine.txt")).isEqualTo("mine");
+		assertThat(service.getLog().iterator().next().getFullMessage()).isEqualTo("unsendable");
+	}
+
+	/** A conflict is its own case and must not be flattened into the push failure. */
+	@Test
+	public void testARejectedPushIsAConflictNotAPlainPushFailure() throws Exception {
+		commitOnRemote("remote.txt", "remote");
+		service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
+
+		assertThatThrownBy(() -> service.push()) //
+				.isInstanceOf(GitConflictException.class) //
+				.isNotInstanceOf(GitPushException.class);
+	}
+
 	@Test
 	public void testPushRejectedByAMovedRemoteIsAConflict() throws Exception {
 		// The remote moves on behind the service's back; the commit built on the stale mirror
@@ -212,24 +279,71 @@ public class GitServiceImplRemoteTest {
 
 		assertThatThrownBy(() -> service.push()) //
 				.isInstanceOf(GitConflictException.class) //
-				.hasMessageContaining("fetch and retry");
+				.hasMessageContaining("resetToRemote");
 		assertThat(remoteHead()).as("remote left untouched by the rejected push").isEqualTo(remoteHead);
 	}
 
 	/** The recovery the conflict message tells the caller to perform actually works. */
 	@Test
-	public void testFetchAndRetryAfterAConflict() throws Exception {
+	public void testFetchResetAndRetryAfterAConflict() throws Exception {
 		commitOnRemote("remote.txt", "remote");
 		service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
 		assertThatThrownBy(() -> service.push()).isInstanceOf(GitConflictException.class);
 
 		service.fetch();
+		// The remote's side is readable before anything local is given up.
+		assertThat(read(service.getRemoteHead(), "remote.txt")).isEqualTo("remote");
+		service.resetToRemote();
 		String retried = service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine, again");
 		service.push();
 
 		assertThat(remoteHead().getName()).isEqualTo(retried);
 		assertThat(remoteContent("mine.txt")).isEqualTo("mine");
 		assertThat(remoteContent("remote.txt")).as("the remote's own work survived").isEqualTo("remote");
+	}
+
+	/**
+	 * The one thing the old force-fetching refspec got wrong: a fetch is a read of the
+	 * remote, and must not throw away a commit that has not been pushed yet — the
+	 * conflict message used to send callers straight into exactly that.
+	 */
+	@Test
+	public void testFetchKeepsUnpushedCommits() throws Exception {
+		String mine = service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
+		commitOnRemote("remote.txt", "remote");
+
+		service.fetch();
+
+		assertThat(service.getFiles().getCommitId()).as("local branch left where it was").isEqualTo(mine);
+		assertThat(read("mine.txt")).isEqualTo("mine");
+		assertThat(service.getRemoteHead()).as("the remote's side is visible").isEqualTo(remoteHead().getName());
+		assertThat(read(service.getRemoteHead(), "remote.txt")).isEqualTo("remote");
+	}
+
+	/** Discarding local commits is possible, but only when it is asked for by name. */
+	@Test
+	public void testResetToRemoteDiscardsLocalCommits() throws Exception {
+		service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
+		commitOnRemote("remote.txt", "remote");
+		service.fetch();
+
+		String head = service.resetToRemote();
+
+		assertThat(head).isEqualTo(remoteHead().getName());
+		assertThat(service.getFiles().getFiles()).containsExactlyInAnyOrder("test", "remote.txt");
+		assertThatThrownBy(() -> service.readLatestFile("mine.txt")).isInstanceOf(GitFileNotFoundException.class);
+	}
+
+	/** Without a fetch there is nothing to reset to, and saying so beats resetting to nothing. */
+	@Test
+	public void testResetToRemoteNeedsAFetchedBranch() throws Exception {
+		service.deactivate();
+		service = new GitServiceImpl();
+		service.activate(new TestGitConfig(url).branch("other"));
+
+		assertThatThrownBy(() -> service.resetToRemote()) //
+				.isInstanceOf(GitWriteException.class) //
+				.hasMessageContaining("refs/remotes/origin/other");
 	}
 
 	// --- helpers -----------------------------------------------------------------
@@ -253,6 +367,12 @@ public class GitServiceImplRemoteTest {
 
 	private String read(String path) throws IOException {
 		try (InputStream in = service.readLatestFile(path)) {
+			return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+		}
+	}
+
+	private String read(String commitId, String path) throws IOException {
+		try (InputStream in = service.readFile(commitId, path)) {
 			return new String(in.readAllBytes(), StandardCharsets.UTF_8);
 		}
 	}

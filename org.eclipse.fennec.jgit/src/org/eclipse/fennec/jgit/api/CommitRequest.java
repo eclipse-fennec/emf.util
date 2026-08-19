@@ -84,6 +84,7 @@ public final class CommitRequest {
 	private final String authorName;
 	private final String authorEmail;
 	private final Boolean push;
+	private final boolean allowEmpty;
 	private final List<Change> changes;
 
 	private CommitRequest(Builder builder) {
@@ -91,6 +92,7 @@ public final class CommitRequest {
 		this.authorName = builder.authorName;
 		this.authorEmail = builder.authorEmail;
 		this.push = builder.push;
+		this.allowEmpty = builder.allowEmpty;
 		this.changes = Collections.unmodifiableList(new ArrayList<>(builder.changes));
 	}
 
@@ -128,6 +130,14 @@ public final class CommitRequest {
 		return push;
 	}
 
+	/**
+	 * @return {@code true} if this commit is to be written even when it changes
+	 *         nothing
+	 */
+	public boolean isAllowEmpty() {
+		return allowEmpty;
+	}
+
 	public List<Change> getChanges() {
 		return changes;
 	}
@@ -142,6 +152,7 @@ public final class CommitRequest {
 		private String authorName;
 		private String authorEmail;
 		private Boolean push;
+		private boolean allowEmpty;
 
 		private Builder(String message) {
 			if (message == null || message.isBlank()) {
@@ -204,6 +215,17 @@ public final class CommitRequest {
 		 */
 		public Builder push(boolean push) {
 			this.push = Boolean.valueOf(push);
+			return this;
+		}
+
+		/**
+		 * Writes the commit even if it changes nothing — an empty commit, as
+		 * {@code git commit --allow-empty} would make it. Off by default: an
+		 * idempotent write should not move the branch, or a history kept as an audit
+		 * trail fills up with entries that record nothing.
+		 */
+		public Builder allowEmpty(boolean allowEmpty) {
+			this.allowEmpty = allowEmpty;
 			return this;
 		}
 

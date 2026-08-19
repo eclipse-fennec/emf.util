@@ -54,8 +54,8 @@ until a configuration exists.
 | `authorName` | `Fennec Git Service` | Author/committer recorded on commits. |
 | `authorEmail` | `fennec@eclipse.org` | Author/committer e-mail. |
 | `pushOnCommit` | `false` | Push after every commit instead of on an explicit `push()`. |
-| `privateKey` | — | Path to an SSH private key. SSH remotes only. |
-| `privateKeyPassphrase` | — | Passphrase of that key, if it is encrypted. |
+| `privateKey` | `""` | Path to an SSH private key. SSH remotes only; empty means no key. |
+| `privateKeyPassphrase` | `""` | Passphrase of that key, if it is encrypted. |
 | `knownHosts` | `""` | Path to an OpenSSH `known_hosts` for host-key verification; empty falls back to `~/.ssh/known_hosts`. |
 | `username` | `""` | User name for an `http(s)://` remote. |
 | `password` | `""` | Password or access token for that user. |
@@ -77,9 +77,10 @@ example), reading the secrets from the environment:
 }
 ```
 
-> `privateKey` and `privateKeyPassphrase` are declared without a default, so a metatype-driven
-> configuration UI marks them as required. Leave them out entirely for anonymous and `http(s)`
-> remotes — the SSH stack is only built when a key is configured.
+> Every property except `repo` is optional. An **empty `privateKey` means no key**, which is
+> what the substitution above yields when the variable is unset: the SSH stack is then not
+> built at all, and anonymous `git://`, `http(s)://` and on-disk repositories work without
+> configuring anything SSH-related.
 
 ### Remote or on disk
 
@@ -94,6 +95,8 @@ The scheme has to match in full: a directory named `gitmodels` is a directory, n
 
 The mirror holds no working tree at all; it is the object database plus the branch ref. That is
 what makes the same code work for both modes, and it is why writing behaves as described below.
+A fetch lands in remote-tracking refs (`refs/remotes/origin/<branch>`) and the configured branch
+follows from there, so `getBranches()` shows the remote's branches next to the local one.
 
 ## Reading
 
@@ -102,6 +105,11 @@ TreeResult tree = git.getFiles();              // every file of the branch head
 TreeResult models = git.getFiles("models");    // only below that prefix
 tree.getCommitId();                            // the commit the listing came from
 tree.getFiles();                               // repository-relative paths
+tree.getEntries();                             // the same, as (path, blobId) records
+tree.getBlobId("models/sensor.ecore");         // that file's blob id, or null
+
+git.exists(null, "models/sensor.ecore");       // without reading the content
+git.blobId(null, "models/sensor.ecore");       // Optional<String>
 
 try (InputStream in = git.readLatestFile("models/sensor.ecore")) { … }
 git.loadLatestFile("models/sensor.ecore", outputStream);
@@ -119,7 +127,14 @@ git.getGitUrl();     // the configured repo
 
 A file that is not in the tree raises **`GitFileNotFoundException`** — an absent file and an
 empty file are different things, and the read methods distinguish them. A directory path is not
-a file either, and is reported the same way.
+a file either, and is reported the same way. `exists(commitId, path)` answers the same question
+without reading anything and without an exception, which is what a store checking before every
+read or delete wants.
+
+A **branch with no commits** — a repository someone just created, the state of a first boot — is
+empty, not broken: `getFiles()` returns an empty listing whose `getCommitId()` is `null`,
+`getLog()` is empty, `exists(…)` is `false`, and a read reports the file as missing. The first
+commit written to it is simply parentless.
 
 For a remote, reads are served from the mirror as it was last fetched. Call `fetch()` to catch
 up with the remote; nothing else refreshes it.
@@ -128,6 +143,20 @@ up with the remote; nothing else refreshes it.
 git.fetch();
 TreeResult current = git.getFiles();
 ```
+
+### Blob ids
+
+Every listed file carries the id of the blob holding its content — git's own content hash,
+computed while the tree is walked, so it costs nothing extra:
+
+```java
+String etag = git.blobId(null, path).orElseThrow();
+```
+
+It identifies **that file's content and nothing else**, which makes it the value to use for an
+HTTP `ETag`, for change detection between two commits, and for deduplication. A commit id is not
+a substitute: it changes on every commit, so using it as an ETag invalidates every cached
+representation whenever any unrelated file is written.
 
 ## Writing
 
@@ -156,6 +185,20 @@ String batch = git.commit(CommitRequest.builder("republish models")
 
 Each call returns the id of the new commit. Changes are applied in the order they were added, so
 a later change to the same path wins. Deleting something that is not there is not an error.
+
+**A request that changes nothing writes no commit.** Storing content that is already stored, or
+deleting a path that is not there, leaves the branch where it is and returns the *unchanged*
+head — the way `git commit` refuses a commit without `--allow-empty`. Otherwise every idempotent
+write would add a history entry that records no change and move the tip, which defeats both an
+audit trail and change detection based on comparing tips. A caller that wants the entry anyway
+asks for it:
+
+```java
+git.commit(CommitRequest.builder("nightly checkpoint")
+        .put("models/sensor.ecore", unchangedBytes)
+        .allowEmpty(true)
+        .build());
+```
 
 The author comes from the configuration; a single commit can override it:
 
@@ -195,26 +238,42 @@ repository it was configured against.
 ### When the remote has moved on
 
 If the remote carries commits the mirror does not have, it rejects the push as non-fast-forward
-and you get a **`GitConflictException`**. The service does not retry on its own — only the
-caller knows how to reconcile the content. The recovery is fetch, rebuild, push:
+and you get a **`GitConflictException`**. The service does not reconcile on its own — only the
+caller knows how to merge the content. The recovery is fetch, reconcile, reset, re-apply:
 
 ```java
 try {
     git.push();
 } catch (GitConflictException e) {
-    git.fetch();                      // mirror catches up with the remote
-    byte[] merged = reconcile(git.readLatestFile(path), myContent);
+    git.fetch();                                       // your commit is still there
+    String theirs = git.getRemoteHead();               // what the remote has now
+    byte[] merged = reconcile(git.readFile(theirs, path), myContent);
+    git.resetToRemote();                               // give up the commit that lost
     git.writeFile(path, merged, "republish after remote change");
     git.push();
 }
 ```
 
-`fetch()` overwrites the mirror's branch with the remote's, so a commit that lost the race is
-discarded — read what you need out of it before fetching, or rebuild it afterwards as above.
+**`fetch()` never discards local work.** It updates the remote-tracking refs and lets the branch
+follow only while that is a fast-forward; a branch carrying unpushed commits is left where it
+is, and the divergence is logged. Both sides are then readable — yours through the normal read
+methods, the remote's through `readFile(getRemoteHead(), path)` — so you can decide before
+anything is given up.
 
-The same exception is raised if the branch moves underneath a commit locally: a commit is always
-built on the head that was current when it started, and the ref is only moved if it is still
-there.
+A push that fails for any other reason — the remote is unreachable, the credentials are
+rejected — raises **`GitPushException`**. It is worth distinguishing from a plain
+`GitWriteException`: the commit is already written and on the branch, so the work is not lost
+and pushing again is all that is needed. A `GitWriteException` from `commit()` means the
+opposite, that nothing was recorded at all.
+
+**`resetToRemote()`** is the one operation that throws local commits away, and it says so in its
+name: it moves the branch to the remote's copy of it as of the last fetch. Nothing else in this
+service does that. On a repository on disk both are no-ops, as `push()` is.
+
+The same `GitConflictException` is raised if the branch moves underneath a commit locally: a
+commit is always built on the head that was current when it started, and the ref is only moved
+if it is still there. That one is a local race, so the way out is to re-read the head and
+re-apply the changes — not to fetch.
 
 ## Errors
 
@@ -223,8 +282,9 @@ All of these are unchecked and live in `org.eclipse.fennec.jgit.exceptions`.
 | Exception | Raised when |
 |---|---|
 | `GitFileNotFoundException` | A requested file is not in the tree of that commit. |
-| `GitConflictException` | The branch moved concurrently, or the remote rejected the push as non-fast-forward. Fetch and retry. |
-| `GitWriteException` | Any other failure while committing or pushing. `GitConflictException` extends it. |
+| `GitConflictException` | The remote rejected the push as non-fast-forward (fetch, reconcile, `resetToRemote()`, re-apply), or the branch moved underneath a commit locally (re-read the head and re-apply). |
+| `GitPushException` | The commit was written but could not be sent to the remote. The change is recorded locally and a later `push()` completes it — retrying is cheap. |
+| `GitWriteException` | The commit itself could not be written, so **nothing** was recorded. `GitConflictException` and `GitPushException` both extend it, so an existing catch block still catches everything. |
 
 ## Bundles & dependencies
 
@@ -234,17 +294,44 @@ All of these are unchecked and live in `org.eclipse.fennec.jgit.exceptions`.
 | `org.eclipse.fennec.jgit.config` | An example configuration bundle (resource-only, OSGi configurator) plus a `launch.bndrun`. |
 | `org.eclipse.fennec.jgit.test` | OSGi integration tests: local repository, anonymous `git://` and SSH transports. |
 
-Requires Java 21, `org.eclipse.jgit` and — for SSH remotes — `org.eclipse.jgit.ssh.apache`
-with Apache MINA sshd, which parses OpenSSH-format and ed25519 keys. Unlike the other utilities
-in this workspace, the implementation is a private package: the service is consumed through
-OSGi, not constructed directly.
+Requires Java 21 and `org.eclipse.jgit`. Everything SSH is **optional** and needed only for
+`ssh://` and `git@host:path` remotes: `org.eclipse.jgit.transport.sshd` is an optional import
+and the sshd types live in a class that is not loaded unless a `privateKey` is configured, so a
+repository on disk or an `http(s)://` remote works without shipping any of it. Configuring a key
+while it is absent fails with an explanation, not with a `NoClassDefFoundError`.
+
+### Running against an SSH remote
+
+Because the whole chain hangs off optional imports, an OSGi resolver leaves all of it out unless
+it is **asked for by name** — `bnd.identity;id='org.eclipse.jgit.ssh.apache'` (which pulls in
+`org.apache.sshd.osgi`, `org.apache.sshd.sftp` and `bcprov`) in the `-runrequires` of the bndrun.
+All of it is published by the `fennecUtil` workspace library, so consumers of that library only
+have to require it, not hunt for coordinates.
+
+| Also needed | When |
+|---|---|
+| `bcpkix` + `bcutil` | Only for a private key in **encrypted PKCS#8** form (`-----BEGIN ENCRYPTED PRIVATE KEY-----`). MINA parses OpenSSH-format keys (encrypted or not) and classic PEM itself, but hands PKCS#8 decryption to BouncyCastle's `org.bouncycastle.pkcs`, which is not in `bcprov`. Missing, it fails at key load with `NoClassDefFoundError: org/bouncycastle/pkcs/PKCSException`. |
+| `org.osgi.framework.bootdelegation=javax.*` | Always, for SSH. `org.eclipse.jgit.ssh.apache` uses `javax.security.auth.*` without importing it, expecting it on the boot class path; Felix boot-delegates only `java.*` by default. |
+| SPI-Fly (`org.apache.aries.spifly.dynamic.bundle` + ASM) | Always, for SSH. JGit and MINA sshd find their providers through `ServiceLoader`. |
+
+Both `org.eclipse.fennec.jgit.config/launch.bndrun` and the OSGi test's `test.bndrun` are
+worked examples of the whole list.
+
+Unlike the other utilities in this workspace, the implementation is a private package: the
+service is consumed through OSGi, not constructed directly.
 
 ## Scope / limitations
 
 - **One branch per configuration.** No branch creation, checkout or merge; configure a second
   service for a second branch.
-- **No merge or rebase.** Conflicting writes are reported, not resolved.
+- **No merge or rebase.** Conflicting writes are reported, not resolved; reconciling content and
+  calling `resetToRemote()` is the caller's decision.
 - **The working tree of an on-disk repository is never updated** by a commit (see above).
 - **`file://` URLs are not recognised** as remotes — use the plain path instead.
 - Reads of a remote are served from the last `fetch()`; there is no polling or background
   refresh.
+- **The mirror of a remote grows with everything written into it.** It is an in-heap object
+  database with no `git gc`, so a long-running writer holds every object it has committed since
+  it started. For write-heavy use prefer a repository on disk ([#47]).
+
+[#47]: https://github.com/eclipse-fennec/emf.util/issues/47

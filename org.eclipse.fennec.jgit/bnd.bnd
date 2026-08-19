@@ -9,5 +9,13 @@
 	org.eclipse.jgit;version=latest,\
 	org.eclipse.jgit.ssh.apache;version=latest
 
+# The SSH backend is only built when a private key is configured, and it lives in its own
+# class so nothing loads it otherwise. Importing it optionally keeps consumers that read a
+# local repository, an anonymous git:// or an https remote from having to resolve the
+# Apache MINA sshd stack.
+Import-Package: \
+	org.eclipse.jgit.transport.sshd;resolution:=optional,\
+	*
+
 
 

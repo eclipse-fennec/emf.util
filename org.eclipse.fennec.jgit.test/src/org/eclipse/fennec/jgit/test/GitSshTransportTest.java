@@ -77,6 +77,7 @@ public class GitSshTransportTest {
 	private static final String FILE_CONTENT = "fooBar";
 	private static final String OPENSSH = "-----BEGIN OPENSSH PRIVATE KEY-----";
 	private static final String CLASSIC_PEM = "-----BEGIN RSA PRIVATE KEY-----";
+	private static final String ENCRYPTED_PKCS8 = "-----BEGIN ENCRYPTED PRIVATE KEY-----";
 
 	private Path repoDir;
 	private Path keyFile;
@@ -146,6 +147,24 @@ public class GitSshTransportTest {
 		// An unencrypted key would authenticate just as well, leaving the configured-passphrase
 		// path untested; insist the key really is encrypted.
 		assertThat(TestKeyFiles.cipherOf(key)).as("key is encrypted").isEqualTo("aes256-ctr");
+		assertReadableOverSsh(key, "s3cret", gsAware, configAdmin);
+	}
+
+	/**
+	 * The format that decides what has to be shipped: OpenSSH and classic PEM keys are
+	 * parsed by MINA itself, but an encrypted PKCS#8 blob is handed to BouncyCastle's
+	 * {@code org.bouncycastle.pkcs} decryptor - which lives in {@code bcpkix}, not in the
+	 * {@code bcprov} that the rest of the SSH stack pulls in. Without that bundle this
+	 * fails with a {@code NoClassDefFoundError} at key load, so the test is also what keeps
+	 * bcpkix in the workspace library's closure honest.
+	 */
+	@Test
+	public void testEncryptedPkcs8Key(
+			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
+			@InjectService ConfigurationAdmin configAdmin) throws Exception {
+		Path key = TestKeyFiles.writeEncryptedPkcs8(TestKeyFiles.rsa(), "s3cret");
+
+		assertIsInFormat(key, ENCRYPTED_PKCS8);
 		assertReadableOverSsh(key, "s3cret", gsAware, configAdmin);
 	}
 

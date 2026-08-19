@@ -46,6 +46,11 @@ needs) resolves.
 | `org.eclipse.fennec.openapi.osgi` | Config-driven OpenAPI `ServiceClient` OSGi component |
 | `org.eclipse.fennec.grpc` | gRPC client + server over EMF instances (with the `io.grpc.netty` wrap bundle) |
 | `org.eclipse.fennec.service.api` | The protocol-agnostic `ServiceClient` / `ServiceOperation` API |
+| `org.eclipse.fennec.jgit` | `GitService`: reading and writing a local or remote git repository (see the note below) |
+| `org.eclipse.fennec.git.webhook.model` | Provider-neutral model of a git push webhook |
+| `org.eclipse.fennec.git.github.webhook.model` | GitHub push webhook payload model |
+| `org.eclipse.fennec.git.gitlab.webhook.model` | GitLab push webhook payload model |
+| `org.eclipse.fennec.git.webhook.rest` | Whiteboard REST endpoints receiving GitHub/GitLab push webhooks |
 | `org.eclipse.fennec.sensinact.mapping` | SensiNact mapping metamodel + runtime (see the note below) |
 
 The exact set is the `-runrequires` of
@@ -61,6 +66,22 @@ resolved closure of those bundles. Two consequences worth knowing:
   [event.atlas](https://github.com/eclipse-fennec/event.atlas) repository as
   `org.eclipse.fennec.event.atlas.mapping` (Maven group `org.eclipse.fennec.event.atlas`);
   it will be dropped from this library when the frozen copy is removed.
+- **The SSH stack for `org.eclipse.fennec.jgit` is in the closure, but you have to require
+  it by name.** The bundle imports `org.eclipse.jgit.transport.sshd` *optionally*, so a
+  consumer that only reads a repository on disk or over `http(s)://` does not have to ship
+  Apache MINA sshd and BouncyCastle at all — and, by the same token, a consumer that wants
+  `ssh://` gets nothing unless its bndrun asks:
+
+  ```
+  -runrequires: \
+      bnd.identity;id='org.eclipse.jgit.ssh.apache',\
+      bnd.identity;id='bcpkix'
+  ```
+
+  `org.eclipse.jgit.ssh.apache` pulls in `org.apache.sshd.*` and `bcprov`; `bcpkix` (with
+  `bcutil`) is only needed for a private key in encrypted PKCS#8 form. See the
+  [git guide](/guides/jgit) for the full list, including the framework properties.
+
 - **Not every bundle in the repo is in the library** — the Model Atlas EObject provider
   (`org.eclipse.fennec.model.atlas.eobject.provider`, **deprecated here: moved to the
   [event.atlas](https://github.com/eclipse-fennec/event.atlas) repository**, Maven group
