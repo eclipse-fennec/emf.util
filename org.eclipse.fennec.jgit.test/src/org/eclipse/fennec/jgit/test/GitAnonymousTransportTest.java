@@ -69,6 +69,7 @@ public class GitAnonymousTransportTest {
 	private static final String FILE_CONTENT = "fooBar";
 
 	private Path repoDir;
+	private Path storeDir;
 	private Git served;
 	private Daemon daemon;
 	private Configuration configuration;
@@ -86,6 +87,9 @@ public class GitAnonymousTransportTest {
 		}
 		if (repoDir != null && Files.exists(repoDir)) {
 			FileUtils.delete(repoDir.toFile(), FileUtils.RECURSIVE | FileUtils.SKIP_MISSING);
+		}
+		if (storeDir != null && Files.exists(storeDir)) {
+			FileUtils.delete(storeDir.toFile(), FileUtils.RECURSIVE | FileUtils.SKIP_MISSING);
 		}
 	}
 
@@ -137,6 +141,44 @@ public class GitAnonymousTransportTest {
 	}
 
 	/**
+	 * The durable-plus-mirrored mode through a real ConfigAdmin configuration:
+	 * {@code repo} is a bare repository on disk, {@code remote} the {@code git://}
+	 * URL. This is the deployment shape a production store wants — the commit is on
+	 * the volume the instant it is written and it still reaches the upstream host —
+	 * and it only works if the added {@code remote} attribute actually arrives at the
+	 * component through DS.
+	 */
+	@Test
+	public void testDurableStoreMirroredToTheRemote(
+			@InjectService(cardinality = 0) ServiceAware<GitService> gsAware,
+			@InjectService ConfigurationAdmin configAdmin) throws Exception {
+
+		String url = serveRepository(true);
+		storeDir = Files.createTempDirectory("gecko-jgit-store");
+		Git.init().setBare(true).setDirectory(storeDir.toFile()).setInitialBranch("main").call().close();
+
+		Dictionary<String, Object> props = new Hashtable<>();
+		props.put("repo", storeDir.toString());
+		props.put("remote", url);
+		props.put("branch", "main");
+		props.put("pushOnCommit", Boolean.TRUE);
+		GitService service = configureService(configAdmin, gsAware, props);
+
+		// The store started empty, so this content can only have come from the remote.
+		assertThat(service.getFiles().getFiles()).contains("test");
+
+		String commitId = service.writeFile("stored.txt", "stored".getBytes(StandardCharsets.UTF_8), "add stored");
+
+		Repository servedRepo = served.getRepository();
+		assertThat(servedRepo.resolve("refs/heads/main").getName()).as("mirrored upstream").isEqualTo(commitId);
+		assertThat(service.getRemoteHead()).as("and known to be there").isEqualTo(commitId);
+		try (Repository onDisk = Git.open(storeDir.toFile()).getRepository()) {
+			assertThat(onDisk.resolve("refs/heads/main").getName()).as("durable on the volume")
+					.isEqualTo(commitId);
+		}
+	}
+
+	/**
 	 * Creates a repository on disk with a single commit on {@code main} and serves it
 	 * over the anonymous git protocol on an ephemeral port.
 	 *
@@ -182,14 +224,20 @@ public class GitAnonymousTransportTest {
 	/** Configures the real GitServiceImpl against the git:// URL (no privateKey). */
 	private GitService configureService(ConfigurationAdmin configAdmin, ServiceAware<GitService> gsAware, String url)
 			throws Exception {
-		configuration = configAdmin.createFactoryConfiguration("GitConfig", "?");
 		Dictionary<String, Object> props = new Hashtable<>();
 		props.put("repo", url);
 		props.put("branch", "main");
+		return configureService(configAdmin, gsAware, props);
+	}
+
+	/** Configures the real GitServiceImpl with the given properties. */
+	private GitService configureService(ConfigurationAdmin configAdmin, ServiceAware<GitService> gsAware,
+			Dictionary<String, Object> props) throws Exception {
+		configuration = configAdmin.createFactoryConfiguration("GitConfig", "?");
 		configuration.update(props);
 
 		GitService service = gsAware.waitForService(10000l);
-		assertThat(service).as("GitService activated over git://").isNotNull();
+		assertThat(service).as("GitService activated for %s", props.get("repo")).isNotNull();
 		return service;
 	}
 

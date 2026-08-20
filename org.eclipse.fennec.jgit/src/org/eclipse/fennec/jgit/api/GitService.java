@@ -127,6 +127,18 @@ public interface GitService {
 	String getGitUrl();
 
 	/**
+	 * The remote this service talks to: the URL configured as {@code remote} for a
+	 * repository on disk, or {@link #getGitUrl()} itself when {@code repo} is a URL
+	 * and the repository is an in-memory mirror of it.
+	 *
+	 * @return the remote's URL, or {@code null} for a repository on disk that stands
+	 *         alone — in which case {@link #push()}, {@link #fetch()} and
+	 *         {@link #resetToRemote()} do nothing and {@link #getRemoteHead()} is
+	 *         {@code null}
+	 */
+	String getRemoteUrl();
+
+	/**
 	 * Brings the mirror of a remote up to date: the remote-tracking refs are
 	 * updated, and the configured branch follows if that is a fast-forward.
 	 * <p>
@@ -140,9 +152,13 @@ public interface GitService {
 	void fetch();
 
 	/**
-	 * @return the id of the commit the remote's copy of the configured branch
-	 *         pointed at when it was last fetched, or {@code null} for a repository
-	 *         on disk or a remote that does not have that branch
+	 * The remote's copy of the configured branch as far as this service knows it:
+	 * what the last {@link #fetch()} saw, or what the last successful
+	 * {@link #push()} put there — so a commit that has been pushed reads as
+	 * pushed, and a commit that has not reads as local.
+	 *
+	 * @return the commit id, or {@code null} for a repository on disk or a remote
+	 *         that does not have that branch
 	 */
 	String getRemoteHead();
 

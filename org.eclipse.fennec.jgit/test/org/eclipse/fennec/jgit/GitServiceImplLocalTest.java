@@ -93,6 +93,7 @@ public class GitServiceImplLocalTest {
 		assertThat(service.getBranch()).isEqualTo("main");
 		assertThat(service.getRef()).isEqualTo("refs/heads/main");
 		assertThat(service.getGitUrl()).isEqualTo(repoDir.toString());
+		assertThat(service.getRemoteUrl()).as("no remote configured").isNull();
 	}
 
 	@Test

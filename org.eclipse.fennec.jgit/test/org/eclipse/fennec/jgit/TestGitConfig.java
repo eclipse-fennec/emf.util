@@ -29,6 +29,7 @@ class TestGitConfig implements GitConfig {
 
 	private final String repo;
 	private String branch = "main";
+	private String remote = "";
 	private String privateKey;
 	private String privateKeyPassphrase;
 	private String knownHosts = "";
@@ -44,6 +45,11 @@ class TestGitConfig implements GitConfig {
 
 	TestGitConfig branch(String branch) {
 		this.branch = branch;
+		return this;
+	}
+
+	TestGitConfig remote(String remote) {
+		this.remote = remote;
 		return this;
 	}
 
@@ -77,6 +83,11 @@ class TestGitConfig implements GitConfig {
 	@Override
 	public String repo() {
 		return repo;
+	}
+
+	@Override
+	public String remote() {
+		return remote;
 	}
 
 	@Override

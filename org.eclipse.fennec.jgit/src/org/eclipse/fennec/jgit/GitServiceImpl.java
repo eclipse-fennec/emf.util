@@ -85,6 +85,13 @@ public class GitServiceImpl implements GitService{
 	private static final String REMOTE_PREFIX = "refs/remotes/origin/";
 
 	private GitConfig config;
+	/**
+	 * The remote this service talks to, or {@code null} when there is none. A
+	 * {@code repo} URL is its own remote; a {@code repo} on disk takes the separately
+	 * configured {@link GitConfig#remote()}, which is what lets one deployment be both
+	 * durable and mirrored.
+	 */
+	private String remoteUrl;
 	private Repository repo;
 	private Git git;
 	private FetchCommand fetchCmd;
@@ -106,44 +113,112 @@ public class GitServiceImpl implements GitService{
 	public void activate(GitConfig config) throws IOException, GitAPIException {
 		logger.log(Level.INFO, "Start git service with repo {0}", config.repo());
 		this.config = config;
-		DfsRepositoryDescription repoDesc = new DfsRepositoryDescription();
-		if (isRemote(config.repo())) {
+		this.remoteUrl = resolveRemoteUrl(config);
+		// A repo given as a URL is held as an in-memory mirror of that remote; a repo given
+		// as a path is the repository itself, and stays on disk whether or not it also has a
+		// remote to mirror to.
+		boolean inMemoryMirror = isRemote(config.repo());
+		if (inMemoryMirror) {
 			repo = new InMemoryRepository.Builder() //
-					.setInitialBranch(config.branch()).setRepositoryDescription(repoDesc) //
+					.setInitialBranch(config.branch()).setRepositoryDescription(new DfsRepositoryDescription()) //
 					.setFS(FS.detect()).build();
-			git = new Git(repo);
-			// A remote/in-memory repo must be populated by fetching from config.repo().
-			// Local on-disk repos already carry their objects, so they are not fetched.
+		} else {
+			repo = openOnDisk();
+		}
+		git = new Git(repo);
+		if (remoteUrl != null) {
+			buildAuthentication();
 			fetchCmd = git.fetch();
-			fetchCmd.setRemote(config.repo());
+			fetchCmd.setRemote(remoteUrl);
 			// Into remote-tracking refs, never straight onto the local branches: a fetch that
 			// force-writes refs/heads/* discards every commit that has not been pushed yet.
 			fetchCmd.setRefSpecs(new RefSpec("+refs/heads/*:" + REMOTE_PREFIX + "*"));
-			// Only build the SSH backend when a private key is configured; anonymous git:// and
-			// https:// remotes need no SSH stack at all. The backend is the Apache MINA sshd
-			// session factory, which (unlike the legacy JSch one) parses OpenSSH-format and
-			// ed25519 keys. It is only attached to actual SshTransports.
-			// Blank counts as "no key": the shipped example configuration reads the path from
-			// an environment variable and leaves it empty when that is unset, and an empty
-			// identity path would be offered to every SSH transport.
-			if (config.privateKey() != null && !config.privateKey().isBlank()) {
-				sshSessionFactory = buildSshSessionFactory();
-			}
-			// https remotes authenticate with user name and token instead. Reading a public repo
-			// needs no credentials, pushing to it does.
-			if (config.username() != null && !config.username().isBlank()) {
-				credentialsProvider = new UsernamePasswordCredentialsProvider(config.username(),
-						config.password() == null ? "" : config.password());
-			}
 			configureTransport(fetchCmd);
-			fetchCmd.call();
-			syncBranchWithRemote();
-		} else {
-			repo = openOnDisk();
-			git = new Git(repo);
+			if (inMemoryMirror) {
+				// The mirror carries no objects of its own, so a remote it cannot read is not a
+				// degraded start but an empty one: let the activation fail.
+				fetchCmd.call();
+				syncBranchWithRemote();
+			} else {
+				fetchOnActivation();
+			}
 		}
 		repo.getObjectDatabase();
 		writer = new GitCommitWriter(repo);
+	}
+
+	/**
+	 * Which remote this service talks to, or {@code null} for a repository on disk that
+	 * stands alone.
+	 * <p>
+	 * A {@code repo} URL is its own remote — the service mirrors it in memory. An
+	 * on-disk {@code repo} takes the separately configured {@code remote}, and that
+	 * combination is the point: the commit is durable on the volume the moment it is
+	 * written <em>and</em> it goes upstream. Naming a remote for a {@code repo} that is
+	 * already a URL would be a second, contradictory remote rather than a third mode,
+	 * so it is refused instead of silently preferring one of them.
+	 */
+	private static String resolveRemoteUrl(GitConfig config) {
+		// Blank counts as unset, like every other configured value (the shipped configuration
+		// substitutes environment variables that are routinely empty).
+		String configured = config.remote() == null ? "" : config.remote().trim();
+		if (isRemote(config.repo())) {
+			if (!configured.isEmpty() && !configured.equals(config.repo())) {
+				throw new IllegalStateException("repo '" + config.repo() + "' is already a remote URL, so remote '"
+						+ configured + "' would be a second one."
+						+ " Configure remote only for a repo that is a path on disk.");
+			}
+			return config.repo();
+		}
+		if (configured.isEmpty()) {
+			return null;
+		}
+		if (!isRemote(configured)) {
+			throw new IllegalStateException("remote '" + configured
+					+ "' is not a remote URL: it has to start with git://, git@, ssh://, http:// or https://."
+					+ " A path on disk belongs in repo, not in remote.");
+		}
+		return configured;
+	}
+
+	/**
+	 * Builds what is needed to authenticate against the remote. Reached only when there
+	 * is one, so a repository on disk that stands alone never touches any of it.
+	 */
+	private void buildAuthentication() {
+		// Only build the SSH backend when a private key is configured; anonymous git:// and
+		// https:// remotes need no SSH stack at all. The backend is the Apache MINA sshd
+		// session factory, which (unlike the legacy JSch one) parses OpenSSH-format and
+		// ed25519 keys. It is only attached to actual SshTransports.
+		// Blank counts as "no key": the shipped example configuration reads the path from
+		// an environment variable and leaves it empty when that is unset, and an empty
+		// identity path would be offered to every SSH transport.
+		if (config.privateKey() != null && !config.privateKey().isBlank()) {
+			sshSessionFactory = buildSshSessionFactory();
+		}
+		// https remotes authenticate with user name and token instead. Reading a public repo
+		// needs no credentials, pushing to it does.
+		if (config.username() != null && !config.username().isBlank()) {
+			credentialsProvider = new UsernamePasswordCredentialsProvider(config.username(),
+					config.password() == null ? "" : config.password());
+		}
+	}
+
+	/**
+	 * Catches an on-disk repository up with its remote while starting, without making
+	 * the start depend on the network. The objects are already on the volume and every
+	 * commit written from here on is durable, so a remote that cannot be reached costs
+	 * the update and nothing else — refusing to activate would take a working store
+	 * offline for a reason that has nothing to do with it. {@link #fetch()} retries.
+	 */
+	private void fetchOnActivation() {
+		try {
+			fetchCmd.call();
+			syncBranchWithRemote();
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "Unable to fetch " + remoteUrl + " while starting; serving "
+					+ repo.getDirectory() + " as it is on disk, fetch() retries", e);
+		}
 	}
 
 	/**
@@ -211,7 +286,7 @@ public class GitServiceImpl implements GitService{
 		try {
 			return SshdSessionFactoryProvider.create(config);
 		} catch (LinkageError e) {
-			throw new IllegalStateException("privateKey is configured for " + config.repo()
+			throw new IllegalStateException("privateKey is configured for " + remoteUrl
 					+ ", but the SSH stack is not available: org.eclipse.jgit.ssh.apache and Apache MINA sshd"
 					+ " have to be present to authenticate with a key", e);
 		}
@@ -258,12 +333,17 @@ public class GitServiceImpl implements GitService{
 	public String getGitUrl() {
 		return config.repo();
 	}
+
+	@Override
+	public String getRemoteUrl() {
+		return remoteUrl;
+	}
 	
 	@Override
 	public void fetch() {
-		if (fetchCmd == null) {
-			// Local on-disk repo: no remote to fetch from.
-			logger.log(Level.INFO, "Skipping fetch for local repo {0}", config.repo());
+		if (remoteUrl == null) {
+			// A repository on disk with no remote: there is nothing to fetch from.
+			logger.log(Level.INFO, "Skipping fetch for {0}, no remote configured", config.repo());
 			return;
 		}
 		synchronized (writeLock) {
@@ -271,7 +351,7 @@ public class GitServiceImpl implements GitService{
 				fetchCmd.call();
 				syncBranchWithRemote();
 			} catch (Exception e) {
-				throw new RuntimeException("Fetch failed for " + config.repo(), e);
+				throw new RuntimeException("Fetch failed for " + remoteUrl, e);
 			}
 		}
 	}
@@ -286,7 +366,7 @@ public class GitServiceImpl implements GitService{
 	private void syncBranchWithRemote() throws IOException {
 		ObjectId remoteHead = repo.resolve(remoteRef());
 		if (remoteHead == null) {
-			logger.log(Level.INFO, "{0} has no branch {1} yet", config.repo(), config.branch());
+			logger.log(Level.INFO, "{0} has no branch {1} yet", remoteUrl, config.branch());
 			return;
 		}
 		ObjectId localHead = repo.resolve(getRef());
@@ -297,7 +377,7 @@ public class GitServiceImpl implements GitService{
 			logger.log(Level.WARNING,
 					"{0} has moved on and {1} carries commits that are not on it; leaving the branch at {2}."
 							+ " Reconcile against getRemoteHead() and call resetToRemote() to take the remote''s side",
-					config.repo(), getRef(), localHead.getName());
+					remoteUrl, getRef(), localHead.getName());
 			return;
 		}
 		moveBranchTo(remoteHead, localHead, localHead == null ? "fetch: created" : "fetch: fast-forward");
@@ -338,8 +418,8 @@ public class GitServiceImpl implements GitService{
 
 	@Override
 	public String getRemoteHead() {
-		if (fetchCmd == null) {
-			// Local on-disk repo: there is no remote whose head could be reported.
+		if (remoteUrl == null) {
+			// No remote whose head could be reported.
 			return null;
 		}
 		try {
@@ -353,9 +433,9 @@ public class GitServiceImpl implements GitService{
 	@Override
 	public String resetToRemote() {
 		synchronized (writeLock) {
-			if (fetchCmd == null) {
-				// Local on-disk repo: no remote to reset to, the branch is already the truth.
-				logger.log(Level.INFO, "Skipping reset for local repo {0}", config.repo());
+			if (remoteUrl == null) {
+				// No remote to reset to: the branch on disk is already the truth.
+				logger.log(Level.INFO, "Skipping reset for {0}, no remote configured", config.repo());
 				return headId();
 			}
 			try {
@@ -540,7 +620,7 @@ public class GitServiceImpl implements GitService{
 			// A mirror keeps the remote's branches as remote-tracking refs and has a local one
 			// only for the configured branch, so listing both is what shows the remote's.
 			List<Ref> branches = git.branchList() //
-					.setListMode(fetchCmd == null ? null : ListMode.ALL) //
+					.setListMode(remoteUrl == null ? null : ListMode.ALL) //
 					.call();
 			return branches.stream().map(Ref::getName).collect(Collectors.toList());
 		} catch (GitAPIException e) {
@@ -631,19 +711,20 @@ public class GitServiceImpl implements GitService{
 	}
 
 	private void pushInternal() {
-		if (!isRemote(config.repo())) {
-			// Local on-disk repo: no remote to push to, the commit is already where it belongs.
-			logger.log(Level.INFO, "Skipping push for local repo {0}", config.repo());
+		if (remoteUrl == null) {
+			// No remote to push to: the commit is already where it belongs, on disk.
+			logger.log(Level.INFO, "Skipping push for {0}, no remote configured", config.repo());
 			return;
 		}
 		try {
 			PushCommand pushCmd = git.push() //
-					.setRemote(config.repo()) //
+					.setRemote(remoteUrl) //
 					.setRefSpecs(new RefSpec(getRef() + ":" + getRef()));
 			configureTransport(pushCmd);
 			for (PushResult result : pushCmd.call()) {
 				for (RemoteRefUpdate update : result.getRemoteUpdates()) {
 					checkPushed(update);
+					recordPushed(update);
 				}
 			}
 		} catch (GitWriteException e) {
@@ -651,7 +732,7 @@ public class GitServiceImpl implements GitService{
 		} catch (Exception e) {
 			// The commit itself is already written and on the branch; only the copy to the
 			// remote failed, which a later push() can still complete.
-			throw new GitPushException("Push failed for " + config.repo(), e);
+			throw new GitPushException("Push failed for " + remoteUrl, e);
 		}
 	}
 
@@ -665,12 +746,63 @@ public class GitServiceImpl implements GitService{
 		case UP_TO_DATE:
 			return;
 		case REJECTED_NONFASTFORWARD:
-			throw new GitConflictException(config.repo() + " rejected " + update.getRemoteName()
+			throw new GitConflictException(remoteUrl + " rejected " + update.getRemoteName()
 					+ " as non-fast-forward: it carries commits this repository does not have."
 					+ " fetch(), reconcile against getRemoteHead(), then resetToRemote() and re-apply the changes");
 		default:
-			throw new GitPushException("Push of " + update.getRemoteName() + " to " + config.repo() + " failed: "
+			throw new GitPushException("Push of " + update.getRemoteName() + " to " + remoteUrl + " failed: "
 					+ update.getStatus() + (update.getMessage() == null ? "" : " - " + update.getMessage()));
+		}
+	}
+
+	/**
+	 * Records what the remote has now that this ref was accepted. Pushing to a URL
+	 * rather than to a configured remote means jgit writes no tracking ref of its own,
+	 * and a fetch is the only other thing that writes one — so without this the
+	 * remote-tracking ref keeps whatever the activation fetch saw, and
+	 * {@link #getRemoteHead()} reports every pushed commit as still unsent. With
+	 * {@code pushOnCommit} that turns into a permanent "diverged from the remote" for
+	 * a repository that is in fact perfectly in sync.
+	 * <p>
+	 * {@code UP_TO_DATE} counts: the remote demonstrably has the commit, it just did
+	 * not need the objects. A failure to write the ref is logged, not thrown — the
+	 * commit is on the remote either way, the next fetch repairs the bookkeeping, and
+	 * reporting a completed push as failed would be the more expensive lie.
+	 */
+	private void recordPushed(RemoteRefUpdate update) {
+		if (!getRef().equals(update.getRemoteName())) {
+			// Only the branch this service tracks; nothing else is pushed, and nothing else
+			// has a remote-tracking ref here.
+			return;
+		}
+		ObjectId pushed = update.getNewObjectId();
+		if (pushed == null || ObjectId.zeroId().equals(pushed)) {
+			return;
+		}
+		try {
+			RefUpdate refUpdate = repo.updateRef(remoteRef());
+			refUpdate.setNewObjectId(pushed);
+			// The remote's branch is the truth about the remote, so its mirror follows
+			// unconditionally instead of being guarded like the local branch is.
+			refUpdate.setForceUpdate(true);
+			refUpdate.setRefLogMessage("push: " + update.getStatus(), false);
+			Result result = refUpdate.update();
+			switch (result) {
+			case NEW:
+			case FAST_FORWARD:
+			case FORCED:
+			case NO_CHANGE:
+				logger.log(Level.INFO, "{0} now at {1} after push ({2})", remoteRef(), pushed.getName(), result);
+				return;
+			default:
+				logger.log(Level.WARNING,
+						"Pushed {0} to {1}, but {2} could not be moved there: {3}."
+								+ " getRemoteHead() stays behind until the next fetch",
+						pushed.getName(), remoteUrl, remoteRef(), result);
+			}
+		} catch (IOException e) {
+			logger.log(Level.WARNING, "Pushed " + pushed.getName() + " to " + remoteUrl + ", but " + remoteRef()
+					+ " could not be updated; getRemoteHead() stays behind until the next fetch", e);
 		}
 	}
 }

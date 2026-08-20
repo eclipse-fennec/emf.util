@@ -306,10 +306,28 @@ Decisions that are easy to undo by accident:
   (`GitSshTransportTest.testEncryptedPkcs8Key` pins it); OpenSSH-format and classic PEM are
   parsed by MINA itself. SSH also needs `org.osgi.framework.bootdelegation=javax.*` (jgit's ssh
   bundle uses `javax.security.auth.*` without importing it) and SPI-Fly + ASM.
+- **A local `repo` path is opened, never discovered** (#55): the search is bounded to the
+  configured directory (ceiling = its parent), so it is that bare repository or that working
+  tree's `.git`, and a path that is neither fails with a message naming the *resolved* path.
+  Unbounded `findGitDir()` walks up and binds to whatever repository contains a mistyped or
+  not-yet-created path — activation succeeds and commits land in the wrong object database.
 - **`fetch()` never discards local work** (#46): it fetches into `refs/remotes/origin/*` and
   only fast-forwards the branch; a diverged branch is left alone and logged. `resetToRemote()`
   is the sole operation that drops local commits, `getRemoteHead()` reads the other side.
   Do not "simplify" the refspec back to `+refs/heads/*:refs/heads/*`.
+- **Storage and mirroring are separate config** (#58): `repo` says where the repository *is*
+  (URL → in-memory mirror, path → on disk), `remote` says what an on-disk one mirrors to, and
+  `remoteUrl` (resolved once in `activate`) is the single notion every remote operation guards
+  on — not `isRemote(config.repo())` or `fetchCmd == null`, which is what tied durability to
+  having no remote. A `remote` on a URL `repo`, or a `remote` that is not a URL, fails
+  activation. In disk+remote mode the activation fetch is best-effort (warn, keep serving the
+  volume); for a mirror it stays fatal, since there would be nothing to serve.
+- **A successful push updates the remote-tracking ref** (#59): the push goes to a *URL*, not to
+  a configured remote, so jgit writes no tracking ref itself and a fetch would be the only thing
+  that ever moves `refs/remotes/origin/<branch>`. `recordPushed()` moves it (`UP_TO_DATE`
+  included — the remote demonstrably has the commit; a failure is logged, never thrown, because
+  the push did succeed). Without it `getRemoteHead()` reports every pushed commit as unsent and
+  `pushOnCommit=true` makes "diverged from the remote" fire from the first write onward.
 - **A request that changes nothing writes no commit** (#45), unless `CommitRequest.allowEmpty`.
   `commit()` then returns the *unchanged* head.
 - An **unborn branch is empty, not an error** (#41): `getFiles()` → empty listing with a `null`
