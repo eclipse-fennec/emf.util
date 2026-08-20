@@ -13,7 +13,6 @@ export const GUIDES = [
   { file: 'openapi-user-guide.md', slug: 'openapi', title: 'EMF ⇄ OpenAPI / REST' },
   { file: 'service-clients.md', slug: 'service-clients', title: 'Service clients' },
   { file: 'jgit-user-guide.md', slug: 'jgit', title: 'Git repositories' },
-  { file: 'sensinact-mapping-user-guide.md', slug: 'sensinact-mapping', title: 'SensiNact mapping' },
   { file: 'workspace-library.md', slug: 'consuming', title: 'Consuming (fennecUtil)' },
 ];
 

@@ -163,12 +163,6 @@ org.slf4j:slf4j-simple:1.7.36
 org.slf4j:slf4j-api:2.0.17
 org.slf4j:slf4j-api:1.7.36
 
-# Dropwizard Metrics — imported by org.eclipse.sensinact.gateway.core.impl
-# (com.codahale.metrics). Sourced from Maven Central here (proper OSGi bundle:
-# BSN io.dropwizard.metrics.core, Export-Package com.codahale.metrics;version=4.2.37);
-# the sensinact-releases copy does not resolve the package in a clean CI resolve.
-io.dropwizard.metrics:metrics-core:4.2.37
-
 # PoC: pinned to a concrete released version (the original template used ${Bundle-Version},
 # which only resolves during mustache template processing, not in a plain workspace).
 org.eclipse.fennec.bnd:org.eclipse.fennec.bnd.library:0.0.9

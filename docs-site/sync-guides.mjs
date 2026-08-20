@@ -6,7 +6,7 @@
 // analyses) are deliberately NOT published. Cross-links inside published pages
 // that point at a NON-published doc are rewritten to the GitHub blob URL so they
 // keep working instead of 404-ing on the site.
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GUIDES, EXAMPLES } from './guides.mjs';
@@ -50,7 +50,14 @@ for (const { items, dir } of sections) {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
   for (const g of items) {
-    const md = rewriteLinks(readFileSync(join(srcDir, g.file), 'utf8'));
+    const src = join(srcDir, g.file);
+    // An allowlist entry whose source doc was deleted or renamed would otherwise fail
+    // the docs build with a bare ENOENT stack trace, several steps away from the cause.
+    if (!existsSync(src)) {
+      throw new Error(`${g.file} is listed in docs-site/guides.mjs but does not exist in docs/ — `
+        + 'remove the entry (or restore the file) so the allowlist matches the sources.');
+    }
+    const md = rewriteLinks(readFileSync(src, 'utf8'));
     writeFileSync(join(outDir, `${g.slug}.md`), md, 'utf8');
     console.log(`synced ${g.file} -> ${dir}/${g.slug}.md`);
     total++;

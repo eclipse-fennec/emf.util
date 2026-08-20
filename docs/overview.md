@@ -58,7 +58,10 @@ Gradle; the bnd toolchain runs on the **7.4.0 snapshot**.
 | [EMF ⇄ OpenAPI / REST](/guides/openapi) | v1 | OpenAPI 3 → Ecore import and a REST client that invokes operations with EObject request/response. |
 | [Service clients](/guides/service-clients) | v1 | One protocol-agnostic `ServiceClient` API over SOAP, OpenAPI (and, planned, gRPC/OData). |
 | [Git repositories](/guides/jgit) | prototype | Reading and writing files, commits and branches of a local or remote git repository through an OSGi service (JGit). |
-| [SensiNact mapping](/guides/sensinact-mapping) | in dev | Declarative XMI mapping of EMF model instances onto Eclipse SensiNact digital-twin providers. |
+
+The SensiNact mapping utility that used to be listed here has moved to
+[event.atlas](https://github.com/eclipse-fennec/event.atlas) (bundle
+`org.eclipse.fennec.event.atlas.mapping`), and its guide is maintained there.
 
 ## Documentation & releases
 

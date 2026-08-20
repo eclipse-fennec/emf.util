@@ -51,21 +51,11 @@ needs) resolves.
 | `org.eclipse.fennec.git.github.webhook.model` | GitHub push webhook payload model |
 | `org.eclipse.fennec.git.gitlab.webhook.model` | GitLab push webhook payload model |
 | `org.eclipse.fennec.git.webhook.rest` | Whiteboard REST endpoints receiving GitHub/GitLab push webhooks |
-| `org.eclipse.fennec.sensinact.mapping` | SensiNact mapping metamodel + runtime (see the note below) |
 
 The exact set is the `-runrequires` of
 `org.eclipse.fennec.util.workspace.library/required.bndrun`, and the index carries the
-resolved closure of those bundles. Two consequences worth knowing:
+resolved closure of those bundles. One consequence worth knowing:
 
-- **The SensiNact gateway is not in the closure.** `org.eclipse.fennec.sensinact.mapping`
-  imports `org.eclipse.sensinact.*` as *optional*, so enabling `fennecUtil` gives you the
-  mapping bundle without dragging the SensiNact gateway bundles into every workspace.
-  A runtime that actually maps into a digital twin has to supply the gateway itself
-  (`org.eclipse.sensinact.gateway.core.*`, e.g. from the sensinact distribution).
-  **Deprecated:** the mapping bundle moved to the
-  [event.atlas](https://github.com/eclipse-fennec/event.atlas) repository as
-  `org.eclipse.fennec.event.atlas.mapping` (Maven group `org.eclipse.fennec.event.atlas`);
-  it will be dropped from this library when the frozen copy is removed.
 - **The SSH stack for `org.eclipse.fennec.jgit` is in the closure, but you have to require
   it by name.** The bundle imports `org.eclipse.jgit.transport.sshd` *optionally*, so a
   consumer that only reads a repository on disk or over `http(s)://` does not have to ship
