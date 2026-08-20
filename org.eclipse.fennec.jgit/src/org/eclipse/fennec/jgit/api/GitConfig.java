@@ -25,6 +25,21 @@ public @interface GitConfig {
 	String branch() default "main";
 
 	/**
+	 * URL of the remote an <em>on-disk</em> {@link #repo()} is mirrored to:
+	 * {@code git://}, {@code git@host:path}, {@code ssh://}, {@code http://} or
+	 * {@code https://}. Commits are then written into the local repository — durable
+	 * the moment they are made — and additionally pushed to, and fetched from, this
+	 * remote.
+	 * <p>
+	 * Empty means the on-disk repository stands alone, with no remote at all. When
+	 * {@link #repo()} is itself a URL that URL <em>is</em> the remote and the service
+	 * holds an in-memory mirror of it; naming a different remote as well is a
+	 * configuration error rather than a third combination.
+	 */
+	@AttributeDefinition(required = false)
+	String remote() default "";
+
+	/**
 	 * Path to the SSH private key authenticating against an SSH remote. Empty means
 	 * no key: the SSH stack is then not built at all, which is what an anonymous
 	 * {@code git://}, an {@code http(s)://} or an on-disk repository wants.

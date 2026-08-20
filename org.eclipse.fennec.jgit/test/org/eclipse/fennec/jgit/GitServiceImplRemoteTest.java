@@ -111,6 +111,7 @@ public class GitServiceImplRemoteTest {
 	@Test
 	public void testRemoteIsFetchedIntoMemoryOnActivate() throws Exception {
 		assertThat(service.getGitUrl()).isEqualTo(url);
+		assertThat(service.getRemoteUrl()).as("the mirrored repo is its own remote").isEqualTo(url);
 		assertThat(service.getBranches()).contains("refs/heads/main");
 		assertThat(service.getFiles().getFiles()).containsExactly("test");
 		assertThat(read("test")).isEqualTo(FILE_CONTENT);
@@ -233,6 +234,76 @@ public class GitServiceImplRemoteTest {
 		service.push(); // up to date, must not be reported as a failure
 
 		assertThat(remoteHead()).isEqualTo(afterFirstPush);
+	}
+
+	// --- what the remote is known to have --------------------------------------
+
+	/**
+	 * {@code getRemoteHead()} is the only thing that answers "is my work on the
+	 * remote?", and a readiness check asking it right after a successful push must not
+	 * be told the work is still unsent. The remote-tracking ref used to be written by
+	 * a fetch alone, so with {@code pushOnCommit} every commit left the two heads
+	 * looking permanently diverged.
+	 */
+	@Test
+	public void testPushOnCommitUpdatesTheKnownRemoteHead() throws Exception {
+		service.deactivate();
+		service = new GitServiceImpl();
+		service.activate(new TestGitConfig(url).pushOnCommit(true));
+
+		String commitId = service.writeFile("auto.txt", "auto".getBytes(StandardCharsets.UTF_8), "auto push");
+
+		assertThat(service.getRemoteHead()).as("the pushed commit is what the remote has").isEqualTo(commitId);
+		assertThat(service.getRemoteHead()).isEqualTo(remoteHead().getName());
+	}
+
+	@Test
+	public void testExplicitPushUpdatesTheKnownRemoteHead() throws Exception {
+		String commitId = service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
+		assertThat(service.getRemoteHead()).as("nothing sent yet").isNotEqualTo(commitId);
+
+		service.push();
+
+		assertThat(service.getRemoteHead()).isEqualTo(commitId);
+		assertThat(service.getRemoteHead()).isEqualTo(remoteHead().getName());
+	}
+
+	/**
+	 * The other half of the same question: a commit that was deliberately not pushed
+	 * has to keep reading as unsent, or the answer is worthless in the other
+	 * direction.
+	 */
+	@Test
+	public void testACommitThatWasNotPushedLeavesTheKnownRemoteHeadBehind() throws Exception {
+		String before = service.getRemoteHead();
+
+		String commitId = service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
+
+		assertThat(service.getRemoteHead()).as("still what the remote had").isEqualTo(before);
+		assertThat(service.getRemoteHead()).as("the local commit is not on the remote").isNotEqualTo(commitId);
+	}
+
+	/** A push with nothing to send reports UP_TO_DATE, which is also an answer about the remote. */
+	@Test
+	public void testASecondPushWithNothingToSendKeepsTheKnownRemoteHead() throws Exception {
+		String commitId = service.writeFile("one.txt", "1".getBytes(StandardCharsets.UTF_8), "one");
+		service.push();
+
+		service.push(); // up to date
+
+		assertThat(service.getRemoteHead()).isEqualTo(commitId);
+	}
+
+	/** A rejected push moved nothing on the remote, so it must not move what we think it has. */
+	@Test
+	public void testARejectedPushLeavesTheKnownRemoteHeadWhereItWas() throws Exception {
+		commitOnRemote("remote.txt", "remote");
+		String before = service.getRemoteHead();
+		service.writeFile("mine.txt", "mine".getBytes(StandardCharsets.UTF_8), "mine");
+
+		assertThatThrownBy(() -> service.push()).isInstanceOf(GitConflictException.class);
+
+		assertThat(service.getRemoteHead()).isEqualTo(before);
 	}
 
 	/**

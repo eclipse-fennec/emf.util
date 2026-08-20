@@ -50,6 +50,7 @@ until a configuration exists.
 | Property | Default | Meaning |
 |---|---|---|
 | `repo` | — | Repository URL or path on disk. Decides everything below (see next section). |
+| `remote` | `""` | URL of the remote an **on-disk** `repo` is mirrored to. Empty means the repository stands alone. |
 | `branch` | `main` | The branch the service reads from and writes to. |
 | `authorName` | `Fennec Git Service` | Author/committer recorded on commits. |
 | `authorEmail` | `fennec@eclipse.org` | Author/committer e-mail. |
@@ -82,16 +83,40 @@ example), reading the secrets from the environment:
 > built at all, and anonymous `git://`, `http(s)://` and on-disk repositories work without
 > configuring anything SSH-related.
 
-### Remote or on disk
+### Where the repository is, and what it mirrors
 
-The `repo` value decides which of two quite different modes the service runs in:
+Two properties decide it: `repo` says where the repository *is*, `remote` says what it talks to.
 
-| `repo` looks like | What the service does |
-|---|---|
-| `git://…`, `git@host:path`, `ssh://…`, `http://…`, `https://…` | Builds an **in-memory mirror** and fetches the branch into it on activation. `fetch()` refreshes it, `push()` sends commits to the remote. |
-| anything else | Opens the repository **on disk** at that path (relative paths resolve against the process working directory). `fetch()` and `push()` are no-ops — there is no remote. |
+| `repo` | `remote` | What the service does |
+|---|---|---|
+| a URL | — | Builds an **in-memory mirror** and fetches the branch into it on activation. `fetch()` refreshes it, `push()` sends commits to the remote. Nothing is durable: the mirror dies with the process. |
+| a path | empty | Opens the repository **on disk** and leaves it alone. Durable, but `fetch()` and `push()` are no-ops — there is no remote. |
+| a path | a URL | **Durable and mirrored.** The repository is the one on disk — a commit is on the volume the moment it is written — and it is also fetched from and pushed to that remote. |
 
-The scheme has to match in full: a directory named `gitmodels` is a directory, not a URL.
+A URL is `git://…`, `git@host:path`, `ssh://…`, `http://…` or `https://…`; the scheme has to
+match in full, so a directory named `gitmodels` is a directory, not a URL. Relative `repo` paths
+resolve against the process working directory.
+
+The third row is what a production store usually wants: the two older modes each give up one
+half of it, and the choice used to be forced. `remote` only applies to a `repo` on disk — when
+`repo` is already a URL, that URL *is* the remote, and configuring a second one fails activation
+rather than silently picking one.
+
+```json
+"GitConfig~store": {
+  "repo": "/srv/fennec/models.git",
+  "remote": "git@github.com:eclipse-fennec/models.git",
+  "branch": "main",
+  "pushOnCommit": true,
+  "privateKey": "$[env:SSH_PRIVATE_KEY;default=]"
+}
+```
+
+In that mode the on-disk repository is the truth and the network is not allowed to hold the
+service hostage: activation fetches the remote to catch up, but a remote it cannot reach is
+logged as a warning and the service comes up serving what is on the volume. `fetch()` retries.
+(For an in-memory mirror the same failure is fatal — without the fetch there would be nothing to
+serve at all.)
 
 The path has to *be* the repository: either a bare repository, or a working tree with its
 `.git` directly in it. Nothing above it is considered, and a path that is neither makes
@@ -137,6 +162,7 @@ git.getLog();        // Iterable<RevCommit>, newest first
 git.getBranch();     // the configured branch
 git.getRef();        // "refs/heads/<branch>"
 git.getGitUrl();     // the configured repo
+git.getRemoteUrl();  // the remote it mirrors to, or null if it has none
 ```
 
 A file that is not in the tree raises **`GitFileNotFoundException`** — an absent file and an
@@ -246,8 +272,9 @@ git.commit(CommitRequest.builder("urgent").put(path, bytes).push(true).build());
 git.commit(CommitRequest.builder("later").put(path, bytes).push(false).build());
 ```
 
-`push()` on a repository on disk is a no-op, so a caller does not have to know which kind of
-repository it was configured against.
+`push()` is a no-op when no remote is configured, so a caller does not have to know which kind
+of repository it was configured against — a repository on disk that *does* have a `remote`
+pushes like any other.
 
 ### When the remote has moved on
 
@@ -268,6 +295,11 @@ try {
 }
 ```
 
+`getRemoteHead()` answers what the remote has *as far as this service knows*: it is written by
+a fetch and by every successful push, so after a push it equals the commit that was sent, and a
+commit that was not pushed leaves it behind. That makes `getRemoteHead()` usable as a readiness
+check — comparing it against the local head tells you whether anything is still unsent.
+
 **`fetch()` never discards local work.** It updates the remote-tracking refs and lets the branch
 follow only while that is a fast-forward; a branch carrying unpushed commits is left where it
 is, and the divergence is logged. Both sides are then readable — yours through the normal read
@@ -282,7 +314,7 @@ opposite, that nothing was recorded at all.
 
 **`resetToRemote()`** is the one operation that throws local commits away, and it says so in its
 name: it moves the branch to the remote's copy of it as of the last fetch. Nothing else in this
-service does that. On a repository on disk both are no-ops, as `push()` is.
+service does that. Without a configured remote both are no-ops, as `push()` is.
 
 The same `GitConflictException` is raised if the branch moves underneath a commit locally: a
 commit is always built on the head that was current when it started, and the ref is only moved
@@ -311,7 +343,8 @@ All of these are unchecked and live in `org.eclipse.fennec.jgit.exceptions`.
 Requires Java 21 and `org.eclipse.jgit`. Everything SSH is **optional** and needed only for
 `ssh://` and `git@host:path` remotes: `org.eclipse.jgit.transport.sshd` is an optional import
 and the sshd types live in a class that is not loaded unless a `privateKey` is configured, so a
-repository on disk or an `http(s)://` remote works without shipping any of it. Configuring a key
+repository with no remote — or one whose remote is `git://` or `http(s)://` — works without
+shipping any of it. Configuring a key
 while it is absent fails with an explanation, not with a `NoClassDefFoundError`.
 
 ### Running against an SSH remote
@@ -341,11 +374,14 @@ service is consumed through OSGi, not constructed directly.
 - **No merge or rebase.** Conflicting writes are reported, not resolved; reconciling content and
   calling `resetToRemote()` is the caller's decision.
 - **The working tree of an on-disk repository is never updated** by a commit (see above).
-- **`file://` URLs are not recognised** as remotes — use the plain path instead.
+- **`file://` URLs are not recognised** as remotes. A repository on the local file system goes
+  into `repo` as a plain path; `remote` has to be a real URL, so mirroring to another directory
+  on the same host is not supported.
 - Reads of a remote are served from the last `fetch()`; there is no polling or background
   refresh.
 - **The mirror of a remote grows with everything written into it.** It is an in-heap object
   database with no `git gc`, so a long-running writer holds every object it has committed since
-  it started. For write-heavy use prefer a repository on disk ([#47]).
+  it started. For write-heavy use configure the repository on disk and mirror it with `remote`
+  ([#47]).
 
 [#47]: https://github.com/eclipse-fennec/emf.util/issues/47
