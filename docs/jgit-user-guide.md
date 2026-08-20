@@ -93,6 +93,20 @@ The `repo` value decides which of two quite different modes the service runs in:
 
 The scheme has to match in full: a directory named `gitmodels` is a directory, not a URL.
 
+The path has to *be* the repository: either a bare repository, or a working tree with its
+`.git` directly in it. Nothing above it is considered, and a path that is neither makes
+activation fail with a message naming the resolved path:
+
+```
+Configured repo 'models' resolves to /srv/fennec/models, which is not a git repository:
+the directory does not exist. Create one with 'git init --bare /srv/fennec/models', point
+repo at an existing repository, or use a remote URL.
+```
+
+The search is bounded on purpose. Walking up the file system would find the repository that
+*contains* a mistyped or not-yet-created path — the service would come up looking healthy and
+write every commit into that repository instead.
+
 The mirror holds no working tree at all; it is the object database plus the branch ref. That is
 what makes the same code work for both modes, and it is why writing behaves as described below.
 A fetch lands in remote-tracking refs (`refs/remotes/origin/<branch>`) and the configured branch

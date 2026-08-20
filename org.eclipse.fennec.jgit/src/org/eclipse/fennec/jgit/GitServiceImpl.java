@@ -139,16 +139,67 @@ public class GitServiceImpl implements GitService{
 			fetchCmd.call();
 			syncBranchWithRemote();
 		} else {
-			FileRepositoryBuilder builder = new FileRepositoryBuilder();
-			File gitDir = new File(config.repo());
-			repo = builder.setInitialBranch(config.branch()) // set branch
-					.findGitDir(gitDir) // scan up the file system tree
-					.build();
-			logger.log(Level.INFO, "repo dir {0}", repo.getDirectory());
+			repo = openOnDisk();
 			git = new Git(repo);
 		}
 		repo.getObjectDatabase();
 		writer = new GitCommitWriter(repo);
+	}
+
+	/**
+	 * Opens the repository the configured path points at, and only that one.
+	 * <p>
+	 * The search is deliberately bounded to the configured directory: it is either a
+	 * git directory itself (a bare repository, or a {@code .git} directory) or a
+	 * working tree whose {@code .git} sits directly in it. jgit's own discovery would
+	 * otherwise walk up the whole file system, so a path that does not exist — a typo,
+	 * an unmounted volume, a directory nobody created yet — would silently bind to
+	 * whichever repository happens to contain it further up, and every commit would be
+	 * written into that stranger's object database. Failing here is the only outcome
+	 * that cannot be mistaken for success.
+	 *
+	 * @return the opened repository
+	 * @throws IOException           if the repository is there but cannot be opened
+	 * @throws GitAPIException       if the configured branch is not a valid ref name
+	 * @throws IllegalStateException if the configured path is not a repository
+	 */
+	private Repository openOnDisk() throws IOException, GitAPIException {
+		File configured = new File(config.repo()).getAbsoluteFile();
+		FileRepositoryBuilder builder = new FileRepositoryBuilder();
+		// findGitDir() stops when the directory it is about to look at is a ceiling, so
+		// the parent is the ceiling: the configured directory itself (and a .git in it,
+		// including the file form a linked working tree uses) is considered, its
+		// ancestors are not.
+		File parent = configured.getParentFile();
+		if (parent != null) {
+			builder.addCeilingDirectory(parent);
+		}
+		builder.findGitDir(configured);
+		if (builder.getGitDir() == null) {
+			throw new IllegalStateException(describeMissingRepository(configured));
+		}
+		Repository repository = builder.setInitialBranch(config.branch()).build();
+		logger.log(Level.INFO, "repo dir {0}", repository.getDirectory());
+		return repository;
+	}
+
+	/**
+	 * Says which path was looked at, what was found there, and how to make it a
+	 * repository — the configured value alone is not enough, because relative paths
+	 * resolve against a working directory the caller does not choose.
+	 */
+	private String describeMissingRepository(File configured) {
+		String found;
+		if (!configured.exists()) {
+			found = "the directory does not exist";
+		} else if (!configured.isDirectory()) {
+			found = "the path is a file, not a directory";
+		} else {
+			found = "the directory exists but is neither a bare repository nor a working tree with a .git in it";
+		}
+		return "Configured repo '" + config.repo() + "' resolves to " + configured + ", which is not a git repository: "
+				+ found + ". Create one with 'git init --bare " + configured
+				+ "', point repo at an existing repository, or use a remote URL.";
 	}
 
 	/**
