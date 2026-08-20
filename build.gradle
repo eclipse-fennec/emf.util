@@ -66,7 +66,6 @@ subprojects {
             'org.eclipse.fennec.soap.client',
             'org.eclipse.fennec.openapi.ecore',
             'org.eclipse.fennec.openapi.client',
-            'org.eclipse.fennec.model.atlas.eobject.provider',
             'org.eclipse.fennec.jgit',
             'org.eclipse.fennec.git.webhook.rest',
     ]
