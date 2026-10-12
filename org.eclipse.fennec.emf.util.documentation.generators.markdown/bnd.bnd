@@ -1,0 +1,20 @@
+Bundle-Name: Fennec EMF Markdown Documentation Generator
+Bundle-Description: Xtend generator rendering an EPackage or EClassifier as Markdown \
+ documentation, optionally with an embedded Mermaid or PlantUML class diagram.
+
+src.xtend-gen: xtend-gen
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.xtext.xbase.lib;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.plantuml;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.apis;version=latest
+
+# The Xtend templates compile down to IterableExtensions & friends, which reach into Guava at
+# runtime. In OSGi that comes from org.eclipse.xtext.xbase.lib's Require-Bundle; for the plain
+# JUnit tests it has to be on the test path explicitly.
+-testpath: \
+	assertj-core;version=latest,\
+	com.google.guava;version=latest

@@ -195,3 +195,9 @@ commons-codec:commons-codec:1.22.0
 org.bouncycastle:bcprov-jdk18on:1.84
 org.bouncycastle:bcpkix-jdk18on:1.84
 org.bouncycastle:bcutil-jdk18on:1.84
+
+# Xtend runtime library (StringConcatenation & the Xbase extensions) — the Ecore
+# documentation generators are written in Xtend, so their generated Java needs it on the
+# build path. 2.44.0 Require-Bundle's com.google.guava [33.6.0,34.0.0) — satisfied by the
+# guava above.
+org.eclipse.xtext:org.eclipse.xtext.xbase.lib:2.44.0

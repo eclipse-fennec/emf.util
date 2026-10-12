@@ -1,0 +1,9 @@
+Bundle-Name: Fennec EMF Ecore Documentation Generator API
+Bundle-Description: The service contract for generating documentation and class diagrams \
+ out of an Ecore model: EcoreToDocumentationService plus the code-generator interfaces and \
+ the EcoreToDocumentationOptions output modes implemented by the format-specific generators.
+
+-library: enableEMF
+
+-testpath: \
+	assertj-core;version=latest

@@ -1,0 +1,18 @@
+Bundle-Name: Fennec EMF Mermaid Class Diagram Generator
+Bundle-Description: Xtend generator rendering an EPackage or EClassifier as a Mermaid \
+ class diagram.
+
+src.xtend-gen: xtend-gen
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.xtext.xbase.lib;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.apis;version=latest
+
+# The Xtend templates compile down to IterableExtensions & friends, which reach into Guava at
+# runtime. In OSGi that comes from org.eclipse.xtext.xbase.lib's Require-Bundle; for the plain
+# JUnit tests it has to be on the test path explicitly.
+-testpath: \
+	assertj-core;version=latest,\
+	com.google.guava;version=latest
