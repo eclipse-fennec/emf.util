@@ -380,7 +380,11 @@ PlantUML class diagram. Drives `model.atlas`'s documentation endpoints (model.at
   diagram.
 - The deprecated `EClass` overloads delegate to the `EClassifier` ones; output is byte-identical
   for both generators (pinned by tests).
-- The bundles are **not** in the workspace library closure yet (`required.bndrun`): model.atlas
-  copies the jars for now, and re-resolving is blocked by the pre-existing `openapi.client` compile
-  error (`SecuritySchemeType` gained a `NULL` constant upstream, the exhaustive switch in
-  `OpenApiAuth` no longer compiles).
+- The bundles are in the workspace library closure (`required.bndrun`) **on this branch**: only the
+  two `.component` bundles are `-runrequires`, the five they need (`apis`, `markdown`, `html`,
+  `mermaid`, `plantuml`) plus `xbase.lib` come in transitively. Guava is deliberately absent — the
+  Xtend runtime needs it only on the *test* path, no generator bundle imports `com.google.common`.
+  Re-resolving was blocked until the `openapi.client` compile error was fixed (#73,
+  `SecuritySchemeType` gained a `NULL` constant upstream; merged into this branch). Until the PR
+  lands on `snapshot`, **model.atlas keeps copying the jars by hand** — the closure is only
+  published from `snapshot`.
