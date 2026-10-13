@@ -158,7 +158,6 @@ class MarkdownCodeGenTest {
 
 	@Test
 	@DisplayName("the deprecated EClass overload renders the same section as the EClassifier one")
-	@SuppressWarnings("deprecation")
 	void deprecatedEClassOverloadMatchesClassifierOverload() {
 		String viaEClass = normalize(codeGen.generateDocumentation(DocGenTestModel.eClass(zoo, "Animal"),
 				EcoreToDocumentationOptions.ONLY_MARKDOWN_CLASS_OVERVIEW));

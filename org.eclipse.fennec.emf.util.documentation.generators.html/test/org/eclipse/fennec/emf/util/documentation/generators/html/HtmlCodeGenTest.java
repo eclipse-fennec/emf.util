@@ -134,7 +134,6 @@ class HtmlCodeGenTest {
 
 	@Test
 	@DisplayName("the deprecated EClass overload renders the same page as the EClassifier one")
-	@SuppressWarnings("deprecation")
 	void deprecatedEClassOverloadMatchesClassifierOverload() {
 		String viaEClass = normalize(codeGen.generateDocumentation(DocGenTestModel.eClass(zoo, "Animal"),
 				EcoreToDocumentationOptions.ONLY_HTML_CLASS_OVERVIEW));

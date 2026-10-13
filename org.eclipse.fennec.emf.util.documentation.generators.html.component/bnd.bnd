@@ -18,4 +18,6 @@ Private-Package: \
 	assertj-core;version=latest,\
 	com.google.guava;version=latest,\
 	org.eclipse.xtext.xbase.lib;version=latest,\
-	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=latest
+	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=latest,\
+	junit-jupiter-api;version=latest,\
+	junit-jupiter-params;version=latest

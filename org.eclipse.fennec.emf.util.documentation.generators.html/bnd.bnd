@@ -16,4 +16,5 @@ src.xtend-gen: xtend-gen
 # JUnit tests it has to be on the test path explicitly.
 -testpath: \
 	assertj-core;version=latest,\
-	com.google.guava;version=latest
+	com.google.guava;version=latest,\
+	junit-jupiter-api;version=latest

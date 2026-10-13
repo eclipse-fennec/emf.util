@@ -6,4 +6,5 @@ Bundle-Description: The service contract for generating documentation and class 
 -library: enableEMF
 
 -testpath: \
-	assertj-core;version=latest
+	assertj-core;version=latest,\
+	junit-jupiter-api;version=latest

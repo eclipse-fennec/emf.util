@@ -111,7 +111,6 @@ class MermaidClassDiagramCodeGenTest {
 
 	@Test
 	@DisplayName("the deprecated EClass overload renders the same diagram as the EClassifier one")
-	@SuppressWarnings("deprecation")
 	void deprecatedEClassOverloadMatchesClassifierOverload() {
 		String viaEClass = normalize(codeGen.generateClassDiagram(DocGenTestModel.eClass(zoo, "Animal")));
 		String viaEClassifier = normalize(codeGen.generateClassDiagram(DocGenTestModel.classifier(zoo, "Animal")));
