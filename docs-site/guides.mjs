@@ -13,6 +13,7 @@ export const GUIDES = [
   { file: 'openapi-user-guide.md', slug: 'openapi', title: 'EMF ⇄ OpenAPI / REST' },
   { file: 'service-clients.md', slug: 'service-clients', title: 'Service clients' },
   { file: 'jgit-user-guide.md', slug: 'jgit', title: 'Git repositories' },
+  { file: 'documentation-generators-user-guide.md', slug: 'documentation', title: 'Ecore documentation' },
   { file: 'workspace-library.md', slug: 'consuming', title: 'Consuming (fennecUtil)' },
 ];
 

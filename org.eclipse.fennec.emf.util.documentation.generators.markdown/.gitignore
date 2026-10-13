@@ -1,0 +1,6 @@
+/bin/
+# The Xtend output IS checked in: the headless Gradle/bnd build has no Xtend compiler and
+# compiles xtend-gen as a second source folder (src.xtend-gen in bnd.bnd). Only the Eclipse
+# builder's incremental state is ignored.
+/xtend-gen/**/*.xtendbin
+/xtend-gen/**/*._trace

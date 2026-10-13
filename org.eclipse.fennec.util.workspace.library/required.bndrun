@@ -19,7 +19,9 @@
 	bnd.identity;id='org.eclipse.fennec.git.github.webhook.model',\
 	bnd.identity;id='org.eclipse.fennec.git.gitlab.webhook.model',\
 	bnd.identity;id='org.eclipse.fennec.git.webhook.model',\
-	bnd.identity;id='org.eclipse.fennec.git.webhook.rest'
+	bnd.identity;id='org.eclipse.fennec.git.webhook.rest',\
+	bnd.identity;id='org.eclipse.fennec.emf.util.documentation.generators.html.component',\
+	bnd.identity;id='org.eclipse.fennec.emf.util.documentation.generators.markdown.component'
 # The SSH stack for org.eclipse.fennec.jgit has to be required by name, because nothing
 # imports it in a way the resolver would follow. org.eclipse.fennec.jgit imports
 # org.eclipse.jgit.transport.sshd optionally (so a consumer reading a local repository or an
@@ -138,4 +140,12 @@
 	bcutil;version='[1.84.0,1.84.1)',\
 	org.apache.sshd.osgi;version='[2.19.0,2.19.1)',\
 	org.apache.sshd.sftp;version='[2.19.0,2.19.1)',\
-	org.eclipse.jgit.ssh.apache;version='[7.7.1,7.7.2)'
+	org.eclipse.jgit.ssh.apache;version='[7.7.1,7.7.2)',\
+	org.eclipse.fennec.emf.util.documentation.generators.apis;version=snapshot,\
+	org.eclipse.fennec.emf.util.documentation.generators.html;version=snapshot,\
+	org.eclipse.fennec.emf.util.documentation.generators.html.component;version=snapshot,\
+	org.eclipse.fennec.emf.util.documentation.generators.markdown;version=snapshot,\
+	org.eclipse.fennec.emf.util.documentation.generators.markdown.component;version=snapshot,\
+	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=snapshot,\
+	org.eclipse.fennec.emf.util.documentation.generators.plantuml;version=snapshot,\
+	org.eclipse.xtext.xbase.lib;version='[2.44.0,2.44.1)'

@@ -1,0 +1,24 @@
+Bundle-Name: Fennec EMF Markdown Documentation Generator Component
+Bundle-Description: Registers the Markdown documentation generator as an \
+ EcoreToDocumentationService OSGi service (media type text/markdown).
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.fennec.emf.util.documentation.generators.apis;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.markdown;version=latest
+
+Private-Package: \
+	org.eclipse.fennec.emf.util.documentation.generators.markdown.component
+
+# At runtime the component only needs the generator it drives; the generator's own stack (the
+# Xtend runtime, Guava, the embedded class-diagram generators) is wired by OSGi. The plain JUnit
+# tests run outside a framework, so that closure has to be on the test path explicitly.
+-testpath: \
+	assertj-core;version=latest,\
+	com.google.guava;version=latest,\
+	org.eclipse.xtext.xbase.lib;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.plantuml;version=latest,\
+	junit-jupiter-api;version=latest,\
+	junit-jupiter-params;version=latest

@@ -1,0 +1,23 @@
+Bundle-Name: Fennec EMF HTML Documentation Generator Component
+Bundle-Description: Registers the HTML documentation generator as an \
+ EcoreToDocumentationService OSGi service (media type text/html).
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.fennec.emf.util.documentation.generators.apis;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.html;version=latest
+
+Private-Package: \
+	org.eclipse.fennec.emf.util.documentation.generators.html.component
+
+# At runtime the component only needs the generator it drives; the generator's own stack (the
+# Xtend runtime, Guava, the embedded class-diagram generators) is wired by OSGi. The plain JUnit
+# tests run outside a framework, so that closure has to be on the test path explicitly.
+-testpath: \
+	assertj-core;version=latest,\
+	com.google.guava;version=latest,\
+	org.eclipse.xtext.xbase.lib;version=latest,\
+	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=latest,\
+	junit-jupiter-api;version=latest,\
+	junit-jupiter-params;version=latest

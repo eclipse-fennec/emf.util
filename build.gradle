@@ -68,6 +68,13 @@ subprojects {
             'org.eclipse.fennec.openapi.client',
             'org.eclipse.fennec.jgit',
             'org.eclipse.fennec.git.webhook.rest',
+            'org.eclipse.fennec.emf.util.documentation.generators.apis',
+            'org.eclipse.fennec.emf.util.documentation.generators.mermaid',
+            'org.eclipse.fennec.emf.util.documentation.generators.plantuml',
+            'org.eclipse.fennec.emf.util.documentation.generators.markdown',
+            'org.eclipse.fennec.emf.util.documentation.generators.html',
+            'org.eclipse.fennec.emf.util.documentation.generators.markdown.component',
+            'org.eclipse.fennec.emf.util.documentation.generators.html.component',
     ]
     afterEvaluate {
         if (project.name in coverageFloorBundles) {

@@ -125,6 +125,9 @@ public abstract class OpenApiAuth {
 			case QUERY -> target.query(parameter, key);
 			case COOKIE -> target.cookie(parameter, key);
 			case HEADER -> target.header(parameter, key);
+			// an unset 'in' would silently drop the credential and answer 401 without a reason
+			case NULL -> throw new ServiceInvocationException(
+					"Security scheme '" + schemeName + "' declares no apiKey location ('in')");
 			}
 		}
 	}
@@ -157,10 +160,11 @@ public abstract class OpenApiAuth {
 
 		@Override
 		void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
+			// every literal is listed (no default) so a new one upstream breaks the build, not the wire
 			boolean accepted = switch (scheme.getType()) {
 			case HTTP -> "bearer".equalsIgnoreCase(scheme.getScheme());
 			case OAUTH2, OPEN_ID_CONNECT -> true;
-			case API_KEY -> false;
+			case API_KEY, NULL -> false;
 			};
 			if (!accepted) {
 				throw mismatch("bearer", schemeName, scheme);
