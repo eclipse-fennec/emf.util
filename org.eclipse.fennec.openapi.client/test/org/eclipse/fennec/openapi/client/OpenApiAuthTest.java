@@ -72,6 +72,14 @@ class OpenApiAuthTest {
 			    "/pets/open": { "get": { "operationId": "viaAnonymous",
 			      "security": [ {}, { "api_key": [] } ],
 			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "$ref": "#/components/schemas/Pet" } } } } } } },
+			    "/pets/untyped": { "get": { "operationId": "viaUntyped",
+			      "security": [ { "untyped": [] } ],
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "$ref": "#/components/schemas/Pet" } } } } } } },
+			    "/pets/nowhere": { "get": { "operationId": "viaNowhere",
+			      "security": [ { "api_key_nowhere": [] } ],
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
 			        "schema": { "$ref": "#/components/schemas/Pet" } } } } } } }
 			  },
 			  "components": {
@@ -87,7 +95,9 @@ class OpenApiAuthTest {
 			      "bearer_auth": { "type": "http", "scheme": "bearer" },
 			      "oauth": { "type": "oauth2", "flows": { "clientCredentials": {
 			        "tokenUrl": "${TOKEN_URL}",
-			        "scopes": { "write:pets": "modify pets" } } } }
+			        "scopes": { "write:pets": "modify pets" } } } },
+			      "untyped": { "name": "X-Mystery", "in": "header" },
+			      "api_key_nowhere": { "type": "apiKey", "name": "X-Api-Key" }
 			    }
 			  }
 			}
@@ -229,6 +239,34 @@ class OpenApiAuthTest {
 					.isInstanceOf(ServiceInvocationException.class)
 					.hasMessageContaining("apiKey")
 					.hasMessageContaining("basic_auth");
+		}
+	}
+
+	@Test
+	@DisplayName("a scheme with an unset type satisfies no credentials — it is rejected, not sent")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
+	void untypedSchemeRejected() {
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)
+				.withAuth("untyped", OpenApiAuth.bearer("my-token"))) {
+			assertThatThrownBy(() -> client.invoke("viaUntyped", null))
+					.isInstanceOf(ServiceInvocationException.class)
+					.hasMessageContaining("bearer")
+					.hasMessageContaining("untyped");
+			assertThat(lastPathAndQuery.get()).isNull(); // nothing hit the server
+		}
+	}
+
+	@Test
+	@DisplayName("an apiKey scheme with an unset 'in' fails loudly instead of going out anonymous")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis; try-with-resources closes the client
+	void apiKeyWithoutLocationRejected() {
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)
+				.withAuth("api_key_nowhere", OpenApiAuth.apiKey("secret"))) {
+			assertThatThrownBy(() -> client.invoke("viaNowhere", null))
+					.isInstanceOf(ServiceInvocationException.class)
+					.hasMessageContaining("api_key_nowhere")
+					.hasMessageContaining("'in'");
+			assertThat(lastPathAndQuery.get()).isNull(); // nothing hit the server
 		}
 	}
 

@@ -340,3 +340,51 @@ Decisions that are easy to undo by accident:
   `GitConflictException` = the head moved, rebuild before sending.
 - Blank config values mean "unset" (#42) — notably `privateKey`, since the shipped config
   substitutes an env var that is often empty.
+
+## Ecore documentation generators
+
+Bundles: `org.eclipse.fennec.emf.util.documentation.generators.{apis,markdown,html,mermaid,plantuml}`
+plus the two DS components `.markdown.component` / `.html.component`, and the OSGi IT
+`.osgi.tests`. Migrated from geckoprojects.org on branch `issue71_docs_generator_bundles_from_geckoprojects`
+(2026-10-12). See `docs/documentation-generators-user-guide.md`.
+
+Renders an `EPackage`/`EClassifier` as Markdown or an HTML page, optionally with a Mermaid or
+PlantUML class diagram. Drives `model.atlas`'s documentation endpoints (model.atlas#363).
+
+- **The generators are Xtend** (`src/**.xtend`), but the build compiles the **checked-in generated
+  Java** in `xtend-gen/` (`src.xtend-gen: xtend-gen`) — there is no Xtend compiler in Gradle/bnd,
+  only Ilenia's Eclipse regenerates it. **A change to a `.xtend` must be hand-mirrored into
+  `xtend-gen/`**, or it compiles, tests green and does nothing. Plain-JUnit tests therefore need
+  `com.google.guava` on `-testpath` (the Xtend runtime reaches into it; the `.component` bundles
+  additionally need `xbase.lib` + the diagram generator bundles, which at runtime come through
+  Import-Package).
+- **`EcoreToDocumentationService` generates in memory**: `generateDocumentation(EPackage|EClassifier,
+  mode) → CharSequence` is the primitive each component implements; the file-writing
+  `doGenerateDocumentation(…, outputFolderRoot)` are `default` methods expressed in terms of it, so
+  a request-scoped caller needs no writable directory. `doCreateOutputFile` writes with a single
+  `Files.writeString(…, UTF_8, CREATE, WRITE, TRUNCATE_EXISTING)` — the former
+  delete-then-create-then-write made concurrent callers for one package throw
+  `FileAlreadyExistsException` or read back an empty document (regression test:
+  `EcoreToDocumentationServiceTest.concurrentGenerationOfTheSamePackage`).
+- **A generator declares what it can produce** (`getSupportedModes()` + `default requireSupported`),
+  and each `generateDocumentation` implementation opens with `requireSupported(mode)`. The one enum
+  spans both formats, so without it `HTML_WITH_PLANTUML_CLASS_DIAGRAM` was accepted, produced a
+  document *without* a diagram and filed it under `ONLY_HTML_CLASS_OVERVIEW`'s name — silently
+  overwriting it. **HTML+PlantUML is deliberately not implemented** (rationale in the user guide:
+  an HTML page is its own renderer, and PlantUML there costs a second heavy renderer or an external
+  render server that would receive the model's names). Adding it later = adding the value to that
+  set.
+- The `*CodeGen` classes keep the diagram flavour in a **field**: not thread-safe, one instance per
+  call (the components do this). The flavour is reset per call — do not drop the `else` branch in
+  `configureClassDiagram`, or an instance reused for an overview-only run keeps the previous
+  diagram.
+- The deprecated `EClass` overloads delegate to the `EClassifier` ones; output is byte-identical
+  for both generators (pinned by tests).
+- The bundles are in the workspace library closure (`required.bndrun`) **on this branch**: only the
+  two `.component` bundles are `-runrequires`, the five they need (`apis`, `markdown`, `html`,
+  `mermaid`, `plantuml`) plus `xbase.lib` come in transitively. Guava is deliberately absent — the
+  Xtend runtime needs it only on the *test* path, no generator bundle imports `com.google.common`.
+  Re-resolving was blocked until the `openapi.client` compile error was fixed (#73,
+  `SecuritySchemeType` gained a `NULL` constant upstream; merged into this branch). Until the PR
+  lands on `snapshot`, **model.atlas keeps copying the jars by hand** — the closure is only
+  published from `snapshot`.
