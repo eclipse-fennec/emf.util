@@ -15,4 +15,4 @@ concurrency:
 
 jobs:
   dependency-review:
-    uses: eclipse-fennec/.github/.github/workflows/reusable-dependency-review.yml@4c8b1daf597d0ae439253b59c42d7e52049d5137 # v1.1.2
+    uses: eclipse-fennec/.github/.github/workflows/reusable-dependency-review.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
