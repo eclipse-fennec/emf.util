@@ -148,4 +148,5 @@
 	org.eclipse.fennec.emf.util.documentation.generators.markdown.component;version=snapshot,\
 	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=snapshot,\
 	org.eclipse.fennec.emf.util.documentation.generators.plantuml;version=snapshot,\
-	org.eclipse.xtext.xbase.lib;version='[2.44.0,2.44.1)'
+	org.eclipse.xtext.xbase.lib;version='[2.44.0,2.44.1)',\
+	org.osgi.service.servlet;version='[2.0.0,2.0.1)'
