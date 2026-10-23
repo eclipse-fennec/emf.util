@@ -21,7 +21,7 @@
 	fennecJacoco,\
 	fennecEMF,\
 	fennecJPA,\
-	fennecEMFModels,\
+	fennecEMFCommonModels,\
 	fennecCodec,\
 	jakartaREST
 
