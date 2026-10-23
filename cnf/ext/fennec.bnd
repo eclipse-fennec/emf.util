@@ -20,8 +20,8 @@
 	fennecTest,\
 	fennecJacoco,\
 	fennecEMF,\
-	fennecJPA,\
-	fennecEMFModels,\
+	fennecPersistence,\
+	fennecEMFCommonModels,\
 	fennecCodec,\
 	jakartaREST
 
