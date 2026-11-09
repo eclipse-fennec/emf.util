@@ -388,30 +388,3 @@ PlantUML class diagram. Drives `model.atlas`'s documentation endpoints (model.at
   `SecuritySchemeType` gained a `NULL` constant upstream; merged into this branch). Until the PR
   lands on `snapshot`, **model.atlas keeps copying the jars by hand** — the closure is only
   published from `snapshot`.
-
-## Generic mapping (moved from emf.streaming, #84)
-
-Bundles: `org.eclipse.fennec.mapping` (plain-Java engine), `.mapping.ocl` (OCL `ExpressionEvaluator`
-on the M2X engine), `.mapping.osgi` (whiteboards + `MappingRegistry`) and `.mapping.osgi.tests`.
-BSNs kept from emf.streaming (which drops its copies once these snapshots are on Sonatype); the
-packages stay at `0.1.0`, the bundles take emf.util's `base-version`. No dependency on
-`org.eclipse.fennec.stream*`. See `docs/mapping-user-guide.md`.
-
-- **The model is external:** `org.eclipse.fennec.mapping.model` (fennec.models#14,
-  `0.1.1-SNAPSHOT`, `;version=latest`) extends `org.eclipse.fennec.atlas.configuration.model`'s
-  `DataTransformation`. emf.streaming's own copy of the model is 0.1.0, so the two never collide.
-  Model changes go to fennec.models, not here.
-- **Value ladder** (`ValueExtractor`): `produce` (first *declared* producer — expression, else
-  function, else feature path; *not* a fallback chain) → `extract` (constant if nothing produced, else
-  `converterId`) → `toTarget` (`targetConverterId`, coercion). Unknown function = no value; unknown
-  converter = value passes unconverted (logged once). Do not "unify" these — they are deliberate.
-- **The engine has no expression language**: `ExpressionEvaluator` is implemented only in
-  `mapping.ocl`, so the core resolves without OCL (expressions then yield nothing). The OCL
-  component reaches `OclEngine` as a DS *service*, which the resolver does not follow — every
-  bndrun (and the workspace library's `required.bndrun`) must `-runrequires`
-  `org.eclipse.fennec.m2x.ocl.engine` + `.parser` by name. M2X is pinned per artifact in
-  `central.mvn` (not the `fennecM2X` library, whose index is larger).
-- **`RegistryMappings`** (PID `FennecMappingRegistry`) reads mappings from the emf.osgi
-  `EObjectRegistry` named `fennec-mappings` (override via `registry.target`), validates each and
-  never changes them; it needs a `MetadataService` for the `emf.fingerprint` filter.
-- `org.eclipse.fennec.mapping` + `.mapping.ocl` are in `coverageFloorBundles`.

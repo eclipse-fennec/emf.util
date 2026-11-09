@@ -185,21 +185,6 @@ org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.impl:0
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.osgi:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.scope.api:0.1.0-SNAPSHOT
 
-# Generic mapping (org.eclipse.fennec.mapping*, moved from emf.streaming, #84): the mapping model
-# (fennec.models#14) extends the shared atlas configuration model's DataTransformation.
-org.eclipse.fennec.models:org.eclipse.fennec.atlas.configuration.model:1.0.0-SNAPSHOT
-org.eclipse.fennec.models:org.eclipse.fennec.mapping.model:0.1.1-SNAPSHOT
-
-# Fennec M2X OCL — the expression language of the mapping (org.eclipse.fennec.mapping.ocl).
-# Pinned per artifact rather than through the fennecM2X workspace library, which brings a
-# larger index. engine/parser/unit + antlr are needed by the OCL tests and the OSGi test run.
-org.eclipse.fennec.m2x:org.eclipse.fennec.m2x.ocl.api:0.1.1-SNAPSHOT
-org.eclipse.fennec.m2x:org.eclipse.fennec.m2x.ocl.model:0.1.1-SNAPSHOT
-org.eclipse.fennec.m2x:org.eclipse.fennec.m2x.ocl.engine:0.1.1-SNAPSHOT
-org.eclipse.fennec.m2x:org.eclipse.fennec.m2x.ocl.parser:0.1.1-SNAPSHOT
-org.eclipse.fennec.m2x:org.eclipse.fennec.m2x.unit:0.1.1-SNAPSHOT
-org.antlr:antlr4-runtime:4.13.2
-
 #jGit
 org.eclipse.jgit:org.eclipse.jgit:7.7.1.202607240634-r
 org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.7.1.202607240634-r

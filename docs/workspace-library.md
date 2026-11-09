@@ -51,9 +51,6 @@ needs) resolves.
 | `org.eclipse.fennec.git.github.webhook.model` | GitHub push webhook payload model |
 | `org.eclipse.fennec.git.gitlab.webhook.model` | GitLab push webhook payload model |
 | `org.eclipse.fennec.git.webhook.rest` | Whiteboard REST endpoints receiving GitHub/GitLab push webhooks |
-| `org.eclipse.fennec.mapping` | Generic mapping engine (plain Java): value ladder, identity resolution, validator, registry |
-| `org.eclipse.fennec.mapping.ocl` | OCL `ExpressionEvaluator` for the mapping (with the M2X OCL engine + parser in the closure) |
-| `org.eclipse.fennec.mapping.osgi` | Function/converter whiteboards and the EObject-registry-backed `MappingRegistry` |
 
 The exact set is the `-runrequires` of
 `org.eclipse.fennec.util.workspace.library/required.bndrun`, and the index carries the

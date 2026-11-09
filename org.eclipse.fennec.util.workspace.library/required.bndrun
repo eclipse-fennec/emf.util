@@ -21,12 +21,7 @@
 	bnd.identity;id='org.eclipse.fennec.git.webhook.model',\
 	bnd.identity;id='org.eclipse.fennec.git.webhook.rest',\
 	bnd.identity;id='org.eclipse.fennec.emf.util.documentation.generators.html.component',\
-	bnd.identity;id='org.eclipse.fennec.emf.util.documentation.generators.markdown.component',\
-	bnd.identity;id='org.eclipse.fennec.mapping',\
-	bnd.identity;id='org.eclipse.fennec.mapping.ocl',\
-	bnd.identity;id='org.eclipse.fennec.mapping.osgi',\
-	bnd.identity;id='org.eclipse.fennec.m2x.ocl.engine',\
-	bnd.identity;id='org.eclipse.fennec.m2x.ocl.parser'
+	bnd.identity;id='org.eclipse.fennec.emf.util.documentation.generators.markdown.component'
 # The SSH stack for org.eclipse.fennec.jgit has to be required by name, because nothing
 # imports it in a way the resolver would follow. org.eclipse.fennec.jgit imports
 # org.eclipse.jgit.transport.sshd optionally (so a consumer reading a local repository or an
@@ -36,10 +31,6 @@
 # remote fails at runtime. bcpkix (+ bcutil) is what MINA needs to read a PKCS#8 encrypted
 # private key ("BEGIN ENCRYPTED PRIVATE KEY"); OpenSSH-format and classic PEM keys are parsed
 # by MINA itself.
-
-# org.eclipse.fennec.mapping.ocl reaches the OCL engine only as a DS service (OclEngine), which
-# the resolver does not follow. The M2X engine and its parser are required by name so the closure
-# carries a working expression language; without them every OCL value source yields nothing.
 
 # io.grpc comes from the gecko wrap bundles (org.geckoprojects.libraries:io.grpc.core /
 # io.grpc.netty in central.mvn — upstream grpc jars ship no OSGi metadata). io.grpc.netty is
@@ -158,16 +149,4 @@
 	org.eclipse.fennec.emf.util.documentation.generators.mermaid;version=snapshot,\
 	org.eclipse.fennec.emf.util.documentation.generators.plantuml;version=snapshot,\
 	org.eclipse.xtext.xbase.lib;version='[2.44.0,2.44.1)',\
-	org.osgi.service.servlet;version='[2.0.0,2.0.1)',\
-	org.eclipse.fennec.atlas.configuration.model;version='[1.0.0,1.0.1)',\
-	org.eclipse.fennec.emf.osgi.eobject.registry;version='[1.1.0,1.1.1)',\
-	org.eclipse.fennec.m2x.ocl.api;version='[0.1.1,0.1.2)',\
-	org.eclipse.fennec.m2x.ocl.model;version='[0.1.1,0.1.2)',\
-	org.eclipse.fennec.m2x.unit;version='[0.1.1,0.1.2)',\
-	org.eclipse.fennec.mapping;version=snapshot,\
-	org.eclipse.fennec.mapping.model;version='[0.1.1,0.1.2)',\
-	org.eclipse.fennec.mapping.ocl;version=snapshot,\
-	org.eclipse.fennec.mapping.osgi;version=snapshot,\
-	org.antlr.antlr4-runtime;version='[4.13.2,4.13.3)',\
-	org.eclipse.fennec.m2x.ocl.engine;version='[0.1.1,0.1.2)',\
-	org.eclipse.fennec.m2x.ocl.parser;version='[0.1.1,0.1.2)'
+	org.osgi.service.servlet;version='[2.0.0,2.0.1)'
