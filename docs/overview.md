@@ -59,10 +59,12 @@ Gradle; the bnd toolchain runs on the **7.4.0 snapshot**.
 | [Service clients](/guides/service-clients) | v1 | One protocol-agnostic `ServiceClient` API over SOAP, OpenAPI (and, planned, gRPC/OData). |
 | [Git repositories](/guides/jgit) | prototype | Reading and writing files, commits and branches of a local or remote git repository through an OSGi service (JGit). |
 | [Ecore documentation](/guides/documentation) | v1 | Markdown or HTML documentation of an `EPackage`/`EClassifier`, with an optional Mermaid or PlantUML class diagram. |
+| [Generic mapping](/guides/mapping) | v1 | Model-driven mapping of source objects onto target objects (value ladder, identity resolution, OCL), with OSGi whiteboards and an EObject-registry-backed mapping registry. |
 
 The SensiNact mapping utility that used to be listed here has moved to
 [event.atlas](https://github.com/eclipse-fennec/event.atlas) (bundle
-`org.eclipse.fennec.event.atlas.mapping`), and its guide is maintained there.
+`org.eclipse.fennec.event.atlas.mapping`), and its guide is maintained there. The
+[generic mapping](/guides/mapping) here is the engine extracted from it (via emf.streaming).
 
 ## Documentation & releases
 

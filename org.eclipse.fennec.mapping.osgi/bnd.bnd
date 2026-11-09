@@ -1,0 +1,20 @@
+Bundle-Name: Eclipse Fennec Mapping OSGi
+Bundle-Description: OSGi layer of the Fennec mapping: whiteboards for value functions and \
+	converters, and the mapping registry on an emf.osgi EObject registry.
+
+-workingset: mapping
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.metatype.annotations;version=latest,\
+	org.eclipse.fennec.atlas.configuration.model;version=latest,\
+	org.eclipse.fennec.mapping.model;version=latest,\
+	org.eclipse.fennec.mapping;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest,\
+	org.eclipse.fennec.emf.osgi.metadata;version=latest
+
+-testpath: \
+	assertj-core
