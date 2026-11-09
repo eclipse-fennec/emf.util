@@ -1,0 +1,26 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+Bundle-Name: Eclipse Fennec Mapping OSGi Tests
+Bundle-Description: OSGi integration tests of the mapping: whiteboards, the mapping registry on an \
+	emf.osgi EObject registry, the OCL evaluator service.
+
+-workingset: mapping
+
+-library: \
+	enableEMF,\
+	enableOSGi-Test
+
+-buildpath: \
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.osgi.service.component;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.test.junit5.cm;version=latest,\
+	org.eclipse.fennec.atlas.configuration.model;version=latest,\
+	org.eclipse.fennec.mapping.model;version=latest,\
+	org.eclipse.fennec.mapping;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest
+
+-testpath: \
+	assertj-core
+
+# Bundles the test run requires without compiling against them: build them first.
+-dependson: org.eclipse.fennec.mapping.osgi,org.eclipse.fennec.mapping.ocl
