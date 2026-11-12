@@ -23,7 +23,7 @@ jobs:
 
   release:
     needs: verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@5b25efac2c99c0f88252d1a45302b8a1ae5876ce # v1.4.0
     with:
       do-release: false
     secrets: inherit
