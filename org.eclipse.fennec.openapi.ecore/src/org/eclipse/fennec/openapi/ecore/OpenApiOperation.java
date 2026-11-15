@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.fennec.service.api.ServiceOperation;
 
 /**
@@ -27,19 +28,30 @@ import org.eclipse.fennec.service.api.ServiceOperation;
  * @param pathTemplate  the path as declared, incl. {@code {param}} placeholders
  * @param requestType   body EClass, synthetic request EClass, or {@code null}
  * @param responseType  the 2xx JSON response EClass (array: its item EClass), or {@code null}
- * @param responseMany  whether the 2xx response is a JSON array of {@link #responseType()}
+ * @param responseMany  whether the 2xx response is a JSON array — of {@link #responseType()}
+ *                      objects, or of {@link #responseDataType()} values
  * @param security      the <b>effective</b> security requirements (the operation's own, falling
  *                      back to the document's global {@code security}): alternatives to choose
  *                      from (OR); within one alternative every entry must be satisfied (AND),
  *                      mapping the {@link OpenApiModel#securitySchemes() scheme name} to the
  *                      required scopes. Empty list = no authentication required.
+ * @param responseDataType the Ecore data type of a <b>scalar</b> 2xx response ({@code string},
+ *                      {@code integer}, {@code number}, {@code boolean}; array: its item type),
+ *                      or {@code null} — then {@link #responseType()} is {@code null} too
  * @see OpenApiImporter
  */
 public record OpenApiOperation(String name, String httpMethod, String pathTemplate,
 		EClass requestType, EClass responseType, boolean responseMany,
-		List<Map<String, List<String>>> security) implements ServiceOperation {
+		List<Map<String, List<String>>> security, EDataType responseDataType) implements ServiceOperation {
 
 	public OpenApiOperation {
 		security = List.copyOf(security);
+	}
+
+	/** An operation without a scalar response ({@link #responseDataType()} {@code null}). */
+	public OpenApiOperation(String name, String httpMethod, String pathTemplate,
+			EClass requestType, EClass responseType, boolean responseMany,
+			List<Map<String, List<String>>> security) {
+		this(name, httpMethod, pathTemplate, requestType, responseType, responseMany, security, null);
 	}
 }

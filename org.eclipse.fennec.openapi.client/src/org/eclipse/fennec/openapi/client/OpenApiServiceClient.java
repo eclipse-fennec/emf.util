@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.resource.Resource;
@@ -42,6 +43,10 @@ import org.eclipse.fennec.service.api.ServiceClient;
 import org.eclipse.fennec.service.api.ServiceInvocationException;
 import org.eclipse.fennec.service.api.ServiceOperation;
 
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
 /**
  * A {@link ServiceClient} that invokes OpenAPI operations over HTTP. The request is one
  * {@link EObject}: either the JSON body itself (body-only operations) or the importer's
@@ -51,7 +56,8 @@ import org.eclipse.fennec.service.api.ServiceOperation;
  * <p>
  * Request-response, {@code application/json}. {@link #invoke} answers a single object; an
  * operation whose answer is a {@linkplain OpenApiOperation#responseMany() JSON array} is invoked
- * through {@link #invokeMany}, which answers the elements in order.
+ * through {@link #invokeMany}, which answers the elements in order; one whose answer is a scalar
+ * ({@link OpenApiOperation#responseDataType()}) through {@link #invokeValue}.
  * Authentication: register {@link OpenApiAuth} credentials per declared scheme via
  * {@link #withAuth(String, OpenApiAuth)} (or {@link #withAuth(OpenApiAuth)} when the document
  * declares exactly one scheme) — applied per operation according to its effective security
@@ -59,6 +65,8 @@ import org.eclipse.fennec.service.api.ServiceOperation;
  * for the native client.
  */
 public final class OpenApiServiceClient implements ServiceClient {
+
+	private static final JsonMapper JSON = JsonMapper.builder().build();
 
 	private final java.net.URI baseUri;
 	private final OpenApiModel model;
@@ -137,11 +145,15 @@ public final class OpenApiServiceClient implements ServiceClient {
 	@Override
 	public EObject invoke(ServiceOperation operation, EObject request) {
 		OpenApiOperation op = openApi(operation);
+		if (op.responseDataType() != null) {
+			throw new ServiceInvocationException("Operation '" + op.name()
+					+ "' returns a scalar — invoke it via invokeValue(...)");
+		}
 		if (op.responseMany()) {
 			throw new ServiceInvocationException("Operation '" + op.name()
 					+ "' returns a JSON array — invoke it via invokeMany(...)");
 		}
-		byte[] body = send(op, request);
+		byte[] body = send(op, request).body();
 		if (op.responseType() == null || body.length == 0) {
 			return null;
 		}
@@ -160,12 +172,95 @@ public final class OpenApiServiceClient implements ServiceClient {
 	 */
 	public List<EObject> invokeMany(ServiceOperation operation, EObject request) {
 		OpenApiOperation op = openApi(operation);
+		if (op.responseDataType() != null) {
+			throw new ServiceInvocationException("Operation '" + op.name()
+					+ "' returns " + (op.responseMany() ? "an array of scalars" : "a scalar")
+					+ " — invoke it via invokeValue(...)");
+		}
 		if (!op.responseMany() || op.responseType() == null) {
 			throw new ServiceInvocationException("Operation '" + op.name()
 					+ "' does not return a JSON array of objects — invoke it via invoke(...)");
 		}
-		byte[] body = send(op, request);
+		byte[] body = send(op, request).body();
 		return body.length == 0 ? List.of() : unmarshal(body, op);
+	}
+
+	/**
+	 * Invokes an operation whose answer is a scalar ({@link OpenApiOperation#responseDataType()}):
+	 * the value typed by the schema — {@link String}, {@link Integer}/{@link Long},
+	 * {@link Float}/{@link Double}, {@link Boolean} — read from JSON, or from plain text when the
+	 * answer is not JSON. For an array of scalars ({@link OpenApiOperation#responseMany()}) the
+	 * answer is a {@code List} of such values, in order. An empty body is {@code null} (an empty
+	 * list for an array).
+	 *
+	 * @throws ServiceInvocationException if the operation does not answer a scalar, or on
+	 *                                    transport, HTTP or conversion failure
+	 */
+	public Object invokeValue(ServiceOperation operation, EObject request) {
+		OpenApiOperation op = openApi(operation);
+		EDataType type = op.responseDataType();
+		if (type == null) {
+			throw new ServiceInvocationException("Operation '" + op.name() + "' does not return a scalar — invoke it via "
+					+ (op.responseMany() ? "invokeMany(...)" : "invoke(...)"));
+		}
+		HttpResponse<byte[]> response = send(op, request);
+		byte[] body = response.body();
+		if (body.length == 0) {
+			return op.responseMany() ? List.of() : null;
+		}
+		String text = new String(body, StandardCharsets.UTF_8);
+		JsonNode json = isJson(response) || op.responseMany() ? parseJson(op, text) : null;
+		if (op.responseMany()) {
+			if (json == null || !json.isArray()) {
+				throw new ServiceInvocationException("Operation '" + op.name() + "' should answer a JSON array, got: "
+						+ snippet(body));
+			}
+			List<Object> values = new ArrayList<>();
+			for (JsonNode element : json.values()) {
+				values.add(scalar(op, type, element));
+			}
+			return values;
+		}
+		return json == null ? convert(op, type, text) : scalar(op, type, json);
+	}
+
+	/** Convenience: {@link #invokeValue(ServiceOperation, EObject)} by operation name. */
+	public Object invokeValue(String operationName, EObject request) {
+		return invokeValue(operationNamed(operationName), request);
+	}
+
+	private static boolean isJson(HttpResponse<?> response) {
+		return response.headers().firstValue("Content-Type").map(type -> type.toLowerCase().contains("json"))
+				.orElse(false);
+	}
+
+	private static JsonNode parseJson(OpenApiOperation op, String text) {
+		try {
+			return JSON.readTree(text);
+		} catch (JacksonException e) {
+			throw new ServiceInvocationException("Could not parse the JSON answer of " + op.name(), e);
+		}
+	}
+
+	/** A JSON value converted to the data type; JSON {@code null} is {@code null}. */
+	private static Object scalar(OpenApiOperation op, EDataType type, JsonNode node) {
+		if (node.isNull()) {
+			return null;
+		}
+		if (!node.isValueNode()) {
+			throw new ServiceInvocationException("Operation '" + op.name() + "' should answer a "
+					+ type.getName() + ", got: " + node);
+		}
+		return convert(op, type, node.isString() ? node.stringValue() : node.asString());
+	}
+
+	private static Object convert(OpenApiOperation op, EDataType type, String literal) {
+		try {
+			return EcoreUtil.createFromString(type, type.getInstanceClass() == String.class ? literal : literal.trim());
+		} catch (RuntimeException e) {
+			throw new ServiceInvocationException("Operation '" + op.name() + "' answered '" + literal
+					+ "', which is no " + type.getName(), e);
+		}
 	}
 
 	/** Convenience: {@link #invokeMany(ServiceOperation, EObject)} by operation name. */
@@ -188,8 +283,8 @@ public final class OpenApiServiceClient implements ServiceClient {
 		return op;
 	}
 
-	/** Sends the request and answers the response body; an HTTP error status throws. */
-	private byte[] send(OpenApiOperation op, EObject request) {
+	/** Sends the request and answers the response; an HTTP error status throws. */
+	private HttpResponse<byte[]> send(OpenApiOperation op, EObject request) {
 		HttpRequest httpRequest = buildRequest(op, request);
 		HttpResponse<byte[]> response;
 		try {
@@ -204,7 +299,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 			throw new ServiceInvocationException("Operation '" + op.name() + "' failed: HTTP "
 					+ response.statusCode() + " — " + snippet(response.body()));
 		}
-		return response.body();
+		return response;
 	}
 
 	// --- request building --------------------------------------------------------------------

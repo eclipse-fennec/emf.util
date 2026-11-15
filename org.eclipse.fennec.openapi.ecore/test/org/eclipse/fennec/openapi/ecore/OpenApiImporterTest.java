@@ -18,6 +18,7 @@ import java.util.Map;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.model.openapi.ApiKeyLocation;
 import org.eclipse.fennec.model.openapi.SecurityScheme;
 import org.eclipse.fennec.model.openapi.SecuritySchemeType;
@@ -239,5 +240,67 @@ class OpenApiImporterTest {
 		assertThat(body.isContainment()).isTrue();
 		assertThat(body.getEType().getName()).isEqualTo("Pet");
 		assertThat(OpenApiAnnotations.in(body)).isEqualTo("body");
+	}
+
+	/** Scalar answers: JSON, text/plain, formats and arrays of scalars (#96). */
+	private static final String SCALAR_DOC = """
+			{
+			  "openapi": "3.0.3",
+			  "info": { "title": "Scalars", "version": "1.0" },
+			  "paths": {
+			    "/login": { "get": { "operationId": "loginUser",
+			      "responses": { "200": { "description": "ok", "content": {
+			        "application/xml": { "schema": { "type": "string" } },
+			        "application/json": { "schema": { "type": "string" } } } } } } },
+			    "/motd": { "get": { "operationId": "motd",
+			      "responses": { "200": { "description": "ok", "content": {
+			        "text/plain": { "schema": { "type": "string" } } } } } } },
+			    "/count": { "get": { "operationId": "count",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "integer", "format": "int32" } } } } } } },
+			    "/total": { "get": { "operationId": "total",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "integer" } } } } } } },
+			    "/ratio": { "get": { "operationId": "ratio",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "number", "format": "float" } } } } } } },
+			    "/alive": { "get": { "operationId": "alive",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "boolean" } } } } } } },
+			    "/tags": { "get": { "operationId": "tags",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "array", "items": { "type": "string" } } } } } } } }
+			  }
+			}
+			""";
+
+	@Test
+	@DisplayName("a scalar answer is typed by its schema, without a diagnostic (#96)")
+	void scalarResponses() {
+		OpenApiModel model = OpenApiImporter.fromJson(SCALAR_DOC.getBytes(StandardCharsets.UTF_8));
+		EcorePackage ecore = EcorePackage.eINSTANCE;
+
+		assertThat(model.operation("loginUser").responseDataType()).isSameAs(ecore.getEString());
+		assertThat(model.operation("motd").responseDataType()).as("text/plain").isSameAs(ecore.getEString());
+		assertThat(model.operation("count").responseDataType()).isSameAs(ecore.getEInt());
+		assertThat(model.operation("total").responseDataType()).isSameAs(ecore.getELong());
+		assertThat(model.operation("ratio").responseDataType()).isSameAs(ecore.getEFloat());
+		assertThat(model.operation("alive").responseDataType()).isSameAs(ecore.getEBoolean());
+		assertThat(model.operations()).allSatisfy(op -> assertThat(op.responseType()).isNull());
+		assertThat(model.operation("loginUser").responseMany()).isFalse();
+
+		OpenApiOperation tags = model.operation("tags");
+		assertThat(tags.responseDataType()).isSameAs(ecore.getEString());
+		assertThat(tags.responseMany()).isTrue();
+
+		assertThat(model.diagnostics()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("an object answer has no response data type (#96)")
+	void objectResponseHasNoDataType() {
+		OpenApiModel model = importDoc();
+		assertThat(model.operation("getPet").responseDataType()).isNull();
+		assertThat(model.operation("listPets").responseDataType()).isNull();
 	}
 }

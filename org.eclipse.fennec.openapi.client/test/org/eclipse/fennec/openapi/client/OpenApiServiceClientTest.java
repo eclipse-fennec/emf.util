@@ -66,6 +66,15 @@ class OpenApiServiceClientTest {
 			          "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } } } } }
 			      }
 			    },
+			    "/login": { "get": { "operationId": "loginUser",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "string" } } } } } } },
+			    "/count": { "get": { "operationId": "countPets",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "integer", "format": "int32" } } } } } } },
+			    "/tags": { "get": { "operationId": "listTags",
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "array", "items": { "type": "string" } } } } } } } },
 			    "/pets/{petId}": {
 			      "get": {
 			        "operationId": "getPet",
@@ -93,6 +102,7 @@ class OpenApiServiceClientTest {
 	private final AtomicReference<String> lastBody = new AtomicReference<>();
 	private final AtomicReference<Integer> status = new AtomicReference<>(200);
 	private final AtomicReference<String> responseBody = new AtomicReference<>(PET_JSON);
+	private final AtomicReference<String> responseContentType = new AtomicReference<>("application/json");
 
 	@BeforeEach
 	void setUp() throws IOException {
@@ -104,7 +114,7 @@ class OpenApiServiceClientTest {
 			lastPathAndQuery.set(exchange.getRequestURI().toString());
 			lastBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
 			byte[] body = responseBody.get().getBytes(StandardCharsets.UTF_8);
-			exchange.getResponseHeaders().add("Content-Type", "application/json");
+			exchange.getResponseHeaders().add("Content-Type", responseContentType.get());
 			exchange.sendResponseHeaders(status.get(), body.length == 0 ? -1 : body.length);
 			try (OutputStream os = exchange.getResponseBody()) {
 				os.write(body);
@@ -212,6 +222,49 @@ class OpenApiServiceClientTest {
 			assertThatThrownBy(() -> client.invokeMany("createPet", EcoreUtil.create(pet)))
 					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invoke(");
 			assertThat(lastMethod.get()).as("no request was sent").isNull();
+		}
+	}
+
+	@Test
+	@DisplayName("a scalar answer is read from JSON, typed by its schema (#96)")
+	void scalarAnswerFromJson() {
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			responseBody.set("\"session 4711\"");
+			assertThat(client.invokeValue("loginUser", null)).isEqualTo("session 4711");
+			responseBody.set("17");
+			assertThat(client.invokeValue("countPets", null)).isEqualTo(17);
+			responseBody.set("[\"cat\",\"dog\"]");
+			assertThat(client.invokeValue("listTags", null)).isEqualTo(List.of("cat", "dog"));
+		}
+	}
+
+	@Test
+	@DisplayName("a scalar answer that is not JSON is read as plain text (#96)")
+	void scalarAnswerFromPlainText() {
+		responseContentType.set("text/plain");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			responseBody.set("logged in user session:4711");
+			assertThat(client.invokeValue("loginUser", null)).isEqualTo("logged in user session:4711");
+			responseBody.set("17\n");
+			assertThat(client.invokeValue("countPets", null)).isEqualTo(17);
+			responseBody.set("");
+			assertThat(client.invokeValue("loginUser", null)).isNull();
+		}
+	}
+
+	@Test
+	@DisplayName("a scalar that does not fit the schema type fails clearly (#96)")
+	void scalarMismatch() {
+		responseBody.set("\"many\"");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			assertThatThrownBy(() -> client.invokeValue("countPets", null))
+					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("many");
+			assertThatThrownBy(() -> client.invoke("loginUser", null))
+					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invokeValue");
+			assertThatThrownBy(() -> client.invokeMany("listTags", null))
+					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invokeValue");
+			assertThatThrownBy(() -> client.invokeValue("listPets", null))
+					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invokeMany");
 		}
 	}
 }
