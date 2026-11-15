@@ -164,8 +164,7 @@ public class OpenApiServiceClientComponent implements ServiceClient {
 	 * nsURIs. The rewritten packages are recorded for unregistration on deactivation.
 	 */
 	private void isolate(OpenApiModel model, String token) {
-		reNamespace(model.schemasPackage(), token);
-		reNamespace(model.requestsPackage(), token);
+		model.generatedPackages().forEach(ePackage -> reNamespace(ePackage, token));
 	}
 
 	/**

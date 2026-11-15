@@ -35,7 +35,7 @@ import org.eclipse.fennec.codec.resource.CodecResource;
 import org.eclipse.fennec.codec.resource.CodecResourceFactory;
 import org.eclipse.fennec.codec.util.MetadataServiceFactory;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
-import org.eclipse.fennec.model.openapi.SecurityScheme;
+import org.eclipse.fennec.model.oas.SecurityScheme;
 import org.eclipse.fennec.openapi.ecore.OpenApiAnnotations;
 import org.eclipse.fennec.openapi.ecore.OpenApiModel;
 import org.eclipse.fennec.openapi.ecore.OpenApiOperation;
@@ -99,12 +99,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 	public OpenApiServiceClient(java.net.URI baseUri, OpenApiModel model, MetadataWhiteboard whiteboard) {
 		this.baseUri = baseUri;
 		this.model = model;
-		if (model.schemasPackage() != null) {
-			whiteboard.registerPackage(model.schemasPackage());
-		}
-		if (model.requestsPackage() != null) {
-			whiteboard.registerPackage(model.requestsPackage());
-		}
+		model.generatedPackages().forEach(whiteboard::registerPackage);
 		this.codecFactory = new CodecResourceFactory(whiteboard);
 		this.http = HttpClient.newHttpClient();
 	}

@@ -23,9 +23,9 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import org.eclipse.fennec.model.openapi.OAuthFlow;
-import org.eclipse.fennec.model.openapi.SecurityScheme;
-import org.eclipse.fennec.model.openapi.SecuritySchemeType;
+import org.eclipse.fennec.model.oas.OAuthFlow;
+import org.eclipse.fennec.model.oas.SecurityScheme;
+import org.eclipse.fennec.model.oas.SecuritySchemeType;
 import org.eclipse.fennec.service.api.ServiceInvocationException;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -178,7 +178,7 @@ public abstract class OpenApiAuth {
 			boolean accepted = switch (scheme.getType()) {
 			case HTTP -> "bearer".equalsIgnoreCase(scheme.getScheme());
 			case OAUTH2, OPEN_ID_CONNECT -> true;
-			case API_KEY, NULL -> false;
+			case API_KEY, MUTUAL_TLS, NULL -> false;
 			};
 			if (!accepted) {
 				throw mismatch("bearer", schemeName, scheme);

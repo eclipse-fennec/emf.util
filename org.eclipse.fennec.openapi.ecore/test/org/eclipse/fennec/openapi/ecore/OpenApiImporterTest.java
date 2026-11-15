@@ -10,6 +10,7 @@
 package org.eclipse.fennec.openapi.ecore;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -19,10 +20,11 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.codec.openapi.oas.OasVersion;
 import org.assertj.core.groups.Tuple;
-import org.eclipse.fennec.model.openapi.ApiKeyLocation;
-import org.eclipse.fennec.model.openapi.SecurityScheme;
-import org.eclipse.fennec.model.openapi.SecuritySchemeType;
+import org.eclipse.fennec.model.oas.ApiKeyLocation;
+import org.eclipse.fennec.model.oas.SecurityScheme;
+import org.eclipse.fennec.model.oas.SecuritySchemeType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -109,12 +111,12 @@ class OpenApiImporterTest {
 				? request.getEPackage() : request.getEPackage()); // synthetic package holds it
 
 		EStructuralFeature petId = request.getEStructuralFeature("petId");
-		assertThat(petId.getEType().getName()).isEqualTo("ELong");
+		assertThat(petId.getEType().getName()).isEqualTo("ELongObject");
 		assertThat(petId.getLowerBound()).isEqualTo(1);              // required
 		assertThat(OpenApiAnnotations.in(petId)).isEqualTo("path");
 
 		EStructuralFeature verbose = request.getEStructuralFeature("verbose");
-		assertThat(verbose.getEType().getName()).isEqualTo("EBoolean");
+		assertThat(verbose.getEType().getName()).isEqualTo("EBooleanObject");
 		assertThat(verbose.getLowerBound()).isZero();
 		assertThat(OpenApiAnnotations.in(verbose)).isEqualTo("query");
 
@@ -283,10 +285,10 @@ class OpenApiImporterTest {
 
 		assertThat(model.operation("loginUser").responseDataType()).isSameAs(ecore.getEString());
 		assertThat(model.operation("motd").responseDataType()).as("text/plain").isSameAs(ecore.getEString());
-		assertThat(model.operation("count").responseDataType()).isSameAs(ecore.getEInt());
-		assertThat(model.operation("total").responseDataType()).isSameAs(ecore.getELong());
-		assertThat(model.operation("ratio").responseDataType()).isSameAs(ecore.getEFloat());
-		assertThat(model.operation("alive").responseDataType()).isSameAs(ecore.getEBoolean());
+		assertThat(model.operation("count").responseDataType()).isSameAs(ecore.getEIntegerObject());
+		assertThat(model.operation("total").responseDataType()).isSameAs(ecore.getELongObject());
+		assertThat(model.operation("ratio").responseDataType()).isSameAs(ecore.getEFloatObject());
+		assertThat(model.operation("alive").responseDataType()).isSameAs(ecore.getEBooleanObject());
 		assertThat(model.operations()).allSatisfy(op -> assertThat(op.responseType()).isNull());
 		assertThat(model.operation("loginUser").responseMany()).isFalse();
 
@@ -333,7 +335,7 @@ class OpenApiImporterTest {
 
 		EStructuralFeature ids = request.getEStructuralFeature("ids");
 		assertThat(ids.isMany()).isTrue();
-		assertThat(ids.getEType()).isSameAs(EcorePackage.eINSTANCE.getELong());
+		assertThat(ids.getEType()).isSameAs(EcorePackage.eINSTANCE.getELongObject());
 		assertThat(OpenApiAnnotations.style(ids)).isEqualTo("pipeDelimited");
 		assertThat(OpenApiAnnotations.explode(ids)).isFalse();
 
@@ -424,5 +426,118 @@ class OpenApiImporterTest {
 		EClass getPet = yaml.operation("getPet").requestType();
 		assertThat(getPet.getEStructuralFeature("petId").getEType())
 				.isSameAs(json.operation("getPet").requestType().getEStructuralFeature("petId").getEType());
+	}
+
+	@Test
+	@DisplayName("the version is taken from the openapi member, in JSON and YAML (#102)")
+	void versionDetection() {
+		assertThat(OpenApiImporter.version("{\"info\":{},\"openapi\":\"3.1.1\"}".getBytes(StandardCharsets.UTF_8), false))
+				.isEqualTo(OasVersion.V3_1);
+		assertThat(OpenApiImporter.version(YAML_DOC.getBytes(StandardCharsets.UTF_8), true)).isEqualTo(OasVersion.V3_0);
+		assertThat(OpenApiImporter.version("info:\n  title: x\n'openapi': '3.2.0'\n".getBytes(StandardCharsets.UTF_8), true))
+				.isEqualTo(OasVersion.V3_2);
+	}
+
+	@Test
+	@DisplayName("Swagger 2.0 and documents without openapi member are rejected with a clear message (#102)")
+	void unsupportedVersions() {
+		assertThatThrownBy(() -> OpenApiImporter.fromJson("{\"swagger\":\"2.0\"}".getBytes(StandardCharsets.UTF_8)))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("no 'openapi' member");
+		assertThatThrownBy(() -> OpenApiImporter.fromYaml("openapi: 4.0.0\n".getBytes(StandardCharsets.UTF_8)))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("'4.0.0' is not supported");
+	}
+
+	@Test
+	@DisplayName("3.1 and 3.2 descriptions import like their 3.0 twin, in JSON and YAML (#102)")
+	void laterVersionsImportLike30() {
+		OpenApiModel v30 = importDoc();
+		for (String version : List.of("3.1.0", "3.2.0")) {
+			OpenApiModel json = OpenApiImporter.fromJson(DOC.replace("3.0.3", version).getBytes(StandardCharsets.UTF_8));
+			OpenApiModel yaml = OpenApiImporter.fromYaml(YAML_DOC.replace("3.0.3", version).getBytes(StandardCharsets.UTF_8));
+			for (OpenApiModel model : List.of(json, yaml)) {
+				assertThat(model.document().getOpenapi()).isEqualTo(version);
+				assertThat(model.diagnostics()).isEmpty();
+				assertThat(model.operations()).extracting(OpenApiOperation::name, OpenApiOperation::httpMethod,
+						OpenApiOperation::pathTemplate, OpenApiOperation::responseMany,
+						op -> op.responseType() == null ? null : op.responseType().getName())
+						.containsExactlyInAnyOrderElementsOf(v30.operations().stream()
+								.map(op -> Tuple.tuple(op.name(), op.httpMethod(), op.pathTemplate(), op.responseMany(),
+										op.responseType() == null ? null : op.responseType().getName()))
+								.toList());
+			}
+		}
+	}
+
+	@Test
+	@DisplayName("an inline body and answer get the codec's inline classifiers, no diagnostic (#102)")
+	void inlineSchemas() {
+		String doc = """
+				{
+				  "openapi": "3.0.3",
+				  "info": { "title": "Inline", "version": "1.0" },
+				  "paths": { "/notes": { "post": { "operationId": "addNote",
+				    "requestBody": { "content": { "application/json": { "schema": {
+				      "type": "object", "properties": { "text": { "type": "string" } } } } } },
+				    "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": {
+				      "type": "array", "items": { "type": "object", "properties": { "id": { "type": "integer" } } } } } } } } } } }
+				}
+				""";
+		OpenApiModel model = OpenApiImporter.fromJson(doc.getBytes(StandardCharsets.UTF_8));
+
+		assertThat(model.diagnostics()).isEmpty();
+		OpenApiOperation add = model.operation("addNote");
+		assertThat(add.requestType().getEStructuralFeature("text")).isNotNull();
+		assertThat(add.responseType().getEStructuralFeature("id")).isNotNull();
+		assertThat(add.responseMany()).isTrue();
+		assertThat(model.generatedPackages()).contains(add.requestType().getEPackage(), add.responseType().getEPackage());
+	}
+
+	@Test
+	@DisplayName("3.2: the query method and additionalOperations become operations; querystring is skipped (#102)")
+	void oas32Methods() {
+		String doc = """
+				openapi: 3.2.0
+				info:
+				  title: Search
+				  version: "1.0"
+				paths:
+				  /search:
+				    query:
+				      operationId: search
+				      requestBody:
+				        content:
+				          application/json:
+				            schema:
+				              $ref: "#/components/schemas/Filter"
+				      responses:
+				        "200":
+				          description: ok
+				    additionalOperations:
+				      PURGE:
+				        operationId: purge
+				        parameters:
+				          - name: q
+				            in: querystring
+				            content:
+				              application/x-www-form-urlencoded:
+				                schema:
+				                  type: object
+				        responses:
+				          "204":
+				            description: gone
+				components:
+				  schemas:
+				    Filter:
+				      type: object
+				      properties:
+				        term:
+				          type: string
+				""";
+		OpenApiModel model = OpenApiImporter.fromYaml(doc.getBytes(StandardCharsets.UTF_8));
+
+		assertThat(model.operation("search").httpMethod()).isEqualTo("QUERY");
+		assertThat(model.operation("search").requestType().getName()).isEqualTo("Filter");
+		assertThat(model.operation("purge").httpMethod()).isEqualTo("PURGE");
+		assertThat(model.diagnostics()).anyMatch(d -> d.contains("querystring"));
 	}
 }

@@ -1,5 +1,5 @@
 Bundle-Name: Fennec EMF OpenAPI Importer
-Bundle-Description: Derives service operations from an OpenAPI document (bootstrap/design-time): \
+Bundle-Description: Derives service operations from an OpenAPI 3.0/3.1/3.2 description (bootstrap/design-time): \
  the data EClasses come from the Fennec codec's OpenAPI/JSON-Schema pipeline; this bundle links \
  the path operations to those EClasses (incl. a synthetic request EClass folding path/query/header \
  parameters + body), mirroring the SOAP/gRPC importers.
@@ -14,7 +14,10 @@ Bundle-Description: Derives service operations from an OpenAPI document (bootstr
 	org.eclipse.fennec.codec.yaml;version=latest,\
 	org.eclipse.fennec.codec.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
-	org.eclipse.fennec.codec;version=latest
+	org.eclipse.fennec.codec;version=latest,\
+	org.eclipse.fennec.codec.jsonschema.model;version=latest,\
+	tools.jackson.core.jackson-core;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest
 
 # org.eclipse.fennec.emf.osgi.component.minimal: only for the non-OSGi bootstrap
 # MetadataServiceFactory.create() -> MetadataServices, which reads the default
@@ -25,8 +28,6 @@ Bundle-Description: Derives service operations from an OpenAPI document (bootstr
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
 	org.eclipse.fennec.codec.jsonschema;version=latest,\
 	org.eclipse.fennec.codec.metadata;version=latest,\
-	tools.jackson.core.jackson-core;version=latest,\
-	tools.jackson.core.jackson-databind;version=latest,\
 	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
 	tools.jackson.dataformat.jackson-dataformat-yaml;version=latest,\
 	org.snakeyaml.engine;version=latest

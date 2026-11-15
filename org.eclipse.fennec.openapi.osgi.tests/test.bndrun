@@ -38,6 +38,7 @@
 	org.eclipse.fennec.codec;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.codec.api;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.codec.jsonschema;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.codec.jsonschema.model;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.codec.metadata;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.codec.openapi;version='[0.1.0,0.1.1)',\
 	org.eclipse.fennec.codec.yaml;version='[0.1.0,0.1.1)',\
