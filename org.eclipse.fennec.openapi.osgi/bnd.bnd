@@ -22,6 +22,7 @@ Private-Package: \
 	org.eclipse.fennec.openapi.ecore;version=snapshot,\
 	org.eclipse.fennec.openapi.model;version=latest,\
 	org.eclipse.fennec.codec;version=latest,\
+	org.eclipse.fennec.codec.yaml;version=latest,\
 	org.eclipse.fennec.codec.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
 	tools.jackson.core.jackson-core;version=latest,\

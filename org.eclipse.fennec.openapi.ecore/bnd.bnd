@@ -11,6 +11,9 @@ Bundle-Description: Derives service operations from an OpenAPI document (bootstr
 	org.eclipse.fennec.service.api;version=snapshot,\
 	org.eclipse.fennec.openapi.model;version=latest,\
 	org.eclipse.fennec.codec.openapi;version=latest,\
+	org.eclipse.fennec.codec.yaml;version=latest,\
+	org.eclipse.fennec.codec.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
 	org.eclipse.fennec.codec;version=latest
 
 # org.eclipse.fennec.emf.osgi.component.minimal: only for the non-OSGi bootstrap
@@ -20,10 +23,10 @@ Bundle-Description: Derives service operations from an OpenAPI document (bootstr
 -testpath: \
 	assertj-core;version=latest,\
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
-	org.eclipse.fennec.codec.api;version=latest,\
 	org.eclipse.fennec.codec.jsonschema;version=latest,\
 	org.eclipse.fennec.codec.metadata;version=latest,\
-	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
 	tools.jackson.core.jackson-core;version=latest,\
 	tools.jackson.core.jackson-databind;version=latest,\
-	com.fasterxml.jackson.core.jackson-annotations;version=latest
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	tools.jackson.dataformat.jackson-dataformat-yaml;version=latest,\
+	org.snakeyaml.engine;version=latest

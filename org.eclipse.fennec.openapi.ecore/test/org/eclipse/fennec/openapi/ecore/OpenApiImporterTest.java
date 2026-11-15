@@ -19,6 +19,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.assertj.core.groups.Tuple;
 import org.eclipse.fennec.model.openapi.ApiKeyLocation;
 import org.eclipse.fennec.model.openapi.SecurityScheme;
 import org.eclipse.fennec.model.openapi.SecuritySchemeType;
@@ -337,5 +338,91 @@ class OpenApiImporterTest {
 		assertThat(OpenApiAnnotations.explode(ids)).isFalse();
 
 		assertThat(request.getEStructuralFeature("limit").isMany()).isFalse();
+	}
+
+	/** {@link #DOC} as YAML (#99). */
+	private static final String YAML_DOC = """
+			openapi: 3.0.3
+			info:
+			  title: Mini Petstore
+			  version: "1.0"
+			paths:
+			  /pets:
+			    post:
+			      operationId: createPet
+			      requestBody:
+			        content:
+			          application/json:
+			            schema:
+			              $ref: "#/components/schemas/Pet"
+			      responses:
+			        "200":
+			          description: ok
+			          content:
+			            application/json:
+			              schema:
+			                $ref: "#/components/schemas/Pet"
+			    get:
+			      operationId: listPets
+			      responses:
+			        "200":
+			          description: ok
+			          content:
+			            application/json:
+			              schema:
+			                type: array
+			                items:
+			                  $ref: "#/components/schemas/Pet"
+			  /pets/{petId}:
+			    get:
+			      operationId: getPet
+			      parameters:
+			        - name: petId
+			          in: path
+			          required: true
+			          schema:
+			            type: integer
+			        - name: verbose
+			          in: query
+			          schema:
+			            type: boolean
+			      responses:
+			        "200":
+			          description: ok
+			          content:
+			            application/json:
+			              schema:
+			                $ref: "#/components/schemas/Pet"
+			components:
+			  schemas:
+			    Pet:
+			      type: object
+			      properties:
+			        id:
+			          type: integer
+			          format: int64
+			        name:
+			          type: string
+			""";
+
+	@Test
+	@DisplayName("a YAML document imports to the same operations as its JSON twin (#99)")
+	void yamlImportsLikeJson() {
+		OpenApiModel json = importDoc();
+		OpenApiModel yaml = OpenApiImporter.fromYaml(YAML_DOC.getBytes(StandardCharsets.UTF_8));
+
+		assertThat(yaml.diagnostics()).isEmpty();
+		assertThat(yaml.operations()).extracting(OpenApiOperation::name, OpenApiOperation::httpMethod,
+				OpenApiOperation::pathTemplate, OpenApiOperation::responseMany)
+				.containsExactlyInAnyOrderElementsOf(json.operations().stream()
+						.map(op -> Tuple.tuple(op.name(), op.httpMethod(), op.pathTemplate(),
+								op.responseMany()))
+						.toList());
+		assertThat(yaml.operation("getPet").responseType().getName()).isEqualTo("Pet");
+		assertThat(yaml.operation("listPets").responseType().getName()).isEqualTo("Pet");
+		assertThat(yaml.operation("createPet").requestType().getName()).isEqualTo("Pet");
+		EClass getPet = yaml.operation("getPet").requestType();
+		assertThat(getPet.getEStructuralFeature("petId").getEType())
+				.isSameAs(json.operation("getPet").requestType().getEStructuralFeature("petId").getEType());
 	}
 }

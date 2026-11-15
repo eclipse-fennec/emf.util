@@ -34,6 +34,7 @@ import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.codec.openapi.OpenApiResourceFactoryImpl;
 import org.eclipse.fennec.codec.resource.CodecResource;
+import org.eclipse.fennec.codec.yaml.YamlFormatProvider;
 import org.eclipse.fennec.model.openapi.Components;
 import org.eclipse.fennec.model.openapi.MediaType;
 import org.eclipse.fennec.model.openapi.OpenAPI;
@@ -103,6 +104,11 @@ public final class OpenApiImporter {
 		return doImport(document, "yaml");
 	}
 
+	/** Imports an OpenAPI 3 document in YAML from a stream. */
+	public static OpenApiModel fromYaml(InputStream document) {
+		return fromYaml(readAll(document));
+	}
+
 	private static OpenApiModel doImport(byte[] document, String extension) {
 		if (document == null) {
 			throw new IllegalArgumentException("document must not be null");
@@ -139,7 +145,10 @@ public final class OpenApiImporter {
 	// --- document loading (codec pipeline) ---------------------------------------------------
 
 	private OpenAPI load(byte[] document, String extension) {
-		OpenApiResourceFactoryImpl factory = new OpenApiResourceFactoryImpl();
+		// the codec reads YAML through its format provider; the JSON factory cannot parse YAML
+		OpenApiResourceFactoryImpl factory = "yaml".equals(extension)
+				? new OpenApiResourceFactoryImpl(new YamlFormatProvider(), OpenApiResourceFactoryImpl.CONTENT_TYPE_OPENAPI_YAML)
+				: new OpenApiResourceFactoryImpl();
 		Resource resource = factory.createResource(URI.createURI("import://openapi." + extension));
 		Map<String, Object> options = new LinkedHashMap<>();
 		options.put(CodecResource.CODEC_ROOT_TYPE, OpenApiPackage.Literals.OPEN_API);
