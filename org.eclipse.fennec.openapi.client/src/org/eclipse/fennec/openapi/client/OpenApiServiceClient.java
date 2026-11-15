@@ -18,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,8 +49,9 @@ import org.eclipse.fennec.service.api.ServiceOperation;
  * drive URL templating, query string, headers and body. JSON payloads are (de)serialized
  * through the Fennec codec; the transport is the JDK {@link HttpClient}.
  * <p>
- * v1: request-response, {@code application/json}, single-object responses (an
- * {@linkplain OpenApiOperation#responseMany() array response} is rejected with a clear error).
+ * Request-response, {@code application/json}. {@link #invoke} answers a single object; an
+ * operation whose answer is a {@linkplain OpenApiOperation#responseMany() JSON array} is invoked
+ * through {@link #invokeMany}, which answers the elements in order.
  * Authentication: register {@link OpenApiAuth} credentials per declared scheme via
  * {@link #withAuth(String, OpenApiAuth)} (or {@link #withAuth(OpenApiAuth)} when the document
  * declares exactly one scheme) — applied per operation according to its effective security
@@ -134,13 +136,60 @@ public final class OpenApiServiceClient implements ServiceClient {
 
 	@Override
 	public EObject invoke(ServiceOperation operation, EObject request) {
+		OpenApiOperation op = openApi(operation);
+		if (op.responseMany()) {
+			throw new ServiceInvocationException("Operation '" + op.name()
+					+ "' returns a JSON array — invoke it via invokeMany(...)");
+		}
+		byte[] body = send(op, request);
+		if (op.responseType() == null || body.length == 0) {
+			return null;
+		}
+		List<EObject> contents = unmarshal(body, op);
+		return contents.isEmpty() ? null : contents.get(0);
+	}
+
+	/**
+	 * Invokes an operation whose answer is a JSON array of objects
+	 * ({@link OpenApiOperation#responseMany()}): each element is read with the operation's
+	 * {@link OpenApiOperation#responseType() responseType} as root type, in order. An empty array
+	 * (or an empty body) is an empty list.
+	 *
+	 * @throws ServiceInvocationException if the operation does not answer an array of objects,
+	 *                                    or on transport, HTTP or deserialization failure
+	 */
+	public List<EObject> invokeMany(ServiceOperation operation, EObject request) {
+		OpenApiOperation op = openApi(operation);
+		if (!op.responseMany() || op.responseType() == null) {
+			throw new ServiceInvocationException("Operation '" + op.name()
+					+ "' does not return a JSON array of objects — invoke it via invoke(...)");
+		}
+		byte[] body = send(op, request);
+		return body.length == 0 ? List.of() : unmarshal(body, op);
+	}
+
+	/** Convenience: {@link #invokeMany(ServiceOperation, EObject)} by operation name. */
+	public List<EObject> invokeMany(String operationName, EObject request) {
+		return invokeMany(operationNamed(operationName), request);
+	}
+
+	private OpenApiOperation operationNamed(String name) {
+		ServiceOperation operation = operation(name);
+		if (operation == null) {
+			throw new ServiceInvocationException("No such operation: " + name);
+		}
+		return openApi(operation);
+	}
+
+	private static OpenApiOperation openApi(ServiceOperation operation) {
 		if (!(operation instanceof OpenApiOperation op)) {
 			throw new ServiceInvocationException("Not an OpenAPI operation: " + operation);
 		}
-		if (op.responseMany()) {
-			throw new ServiceInvocationException("Operation '" + op.name()
-					+ "' returns a JSON array — not supported in v1 (single-object responses only)");
-		}
+		return op;
+	}
+
+	/** Sends the request and answers the response body; an HTTP error status throws. */
+	private byte[] send(OpenApiOperation op, EObject request) {
 		HttpRequest httpRequest = buildRequest(op, request);
 		HttpResponse<byte[]> response;
 		try {
@@ -155,10 +204,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 			throw new ServiceInvocationException("Operation '" + op.name() + "' failed: HTTP "
 					+ response.statusCode() + " — " + snippet(response.body()));
 		}
-		if (op.responseType() == null || response.body().length == 0) {
-			return null;
-		}
-		return unmarshal(response.body(), op);
+		return response.body();
 	}
 
 	// --- request building --------------------------------------------------------------------
@@ -286,7 +332,8 @@ public final class OpenApiServiceClient implements ServiceClient {
 		return out.toByteArray();
 	}
 
-	private EObject unmarshal(byte[] body, OpenApiOperation op) {
+	/** Reads the body with the response type as root type; a JSON array yields one object per element. */
+	private List<EObject> unmarshal(byte[] body, OpenApiOperation op) {
 		Resource resource = codecFactory.createResource(URI.createURI("mem://response.json"));
 		Map<String, Object> options = new LinkedHashMap<>();
 		options.put(CodecResource.CODEC_ROOT_TYPE, op.responseType());
@@ -296,7 +343,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 			throw new ServiceInvocationException("Could not deserialize the response of " + op.name()
 					+ " as " + op.responseType().getName(), e);
 		}
-		return resource.getContents().isEmpty() ? null : resource.getContents().get(0);
+		return new ArrayList<>(resource.getContents());
 	}
 
 	// --- misc ----------------------------------------------------------------------------------

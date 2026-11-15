@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.emf.ecore.EClass;
@@ -58,6 +59,11 @@ class OpenApiServiceClientTest {
 			          "schema": { "$ref": "#/components/schemas/Pet" } } } },
 			        "responses": { "200": { "description": "ok", "content": { "application/json": {
 			          "schema": { "$ref": "#/components/schemas/Pet" } } } } }
+			      },
+			      "get": {
+			        "operationId": "listPets",
+			        "responses": { "200": { "description": "ok", "content": { "application/json": {
+			          "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } } } } }
 			      }
 			    },
 			    "/pets/{petId}": {
@@ -86,6 +92,7 @@ class OpenApiServiceClientTest {
 	private final AtomicReference<String> lastPathAndQuery = new AtomicReference<>();
 	private final AtomicReference<String> lastBody = new AtomicReference<>();
 	private final AtomicReference<Integer> status = new AtomicReference<>(200);
+	private final AtomicReference<String> responseBody = new AtomicReference<>(PET_JSON);
 
 	@BeforeEach
 	void setUp() throws IOException {
@@ -96,9 +103,9 @@ class OpenApiServiceClientTest {
 			lastMethod.set(exchange.getRequestMethod());
 			lastPathAndQuery.set(exchange.getRequestURI().toString());
 			lastBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-			byte[] body = PET_JSON.getBytes(StandardCharsets.UTF_8);
+			byte[] body = responseBody.get().getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().add("Content-Type", "application/json");
-			exchange.sendResponseHeaders(status.get(), body.length);
+			exchange.sendResponseHeaders(status.get(), body.length == 0 ? -1 : body.length);
 			try (OutputStream os = exchange.getResponseBody()) {
 				os.write(body);
 			}
@@ -166,6 +173,45 @@ class OpenApiServiceClientTest {
 					.isInstanceOf(ServiceInvocationException.class)
 					.hasMessageContaining("404");
 			assertThat(client.unwrap(HttpClient.class)).isPresent();
+		}
+	}
+
+	@Test
+	@DisplayName("an array answer is read element by element, in order (#95)")
+	void arrayAnswer() {
+		responseBody.set("[{\"id\":1,\"name\":\"Rex\"},{\"id\":2,\"name\":\"Bello\"}]");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			List<EObject> pets = client.invokeMany("listPets", null);
+
+			assertThat(lastMethod.get()).isEqualTo("GET");
+			assertThat(lastPathAndQuery.get()).isEqualTo("/pets");
+			assertThat(pets).extracting(pet -> pet.eClass().getName()).containsExactly("Pet", "Pet");
+			assertThat(pets).extracting(pet -> String.valueOf(pet.eGet(pet.eClass().getEStructuralFeature("name"))))
+					.containsExactly("Rex", "Bello");
+		}
+	}
+
+	@Test
+	@DisplayName("an empty array answer (or an empty body) is an empty list (#95)")
+	void emptyArrayAnswer() {
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			responseBody.set("[]");
+			assertThat(client.invokeMany("listPets", null)).isEmpty();
+			responseBody.set("");
+			assertThat(client.invokeMany("listPets", null)).isEmpty();
+		}
+	}
+
+	@Test
+	@DisplayName("invoke and invokeMany point at each other for the wrong kind of answer (#95)")
+	void wrongInvokeFlavour() {
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			assertThatThrownBy(() -> client.invoke("listPets", null))
+					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invokeMany");
+			EClass pet = (EClass) model.schemasPackage().getEClassifier("Pet");
+			assertThatThrownBy(() -> client.invokeMany("createPet", EcoreUtil.create(pet)))
+					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invoke(");
+			assertThat(lastMethod.get()).as("no request was sent").isNull();
 		}
 	}
 }
