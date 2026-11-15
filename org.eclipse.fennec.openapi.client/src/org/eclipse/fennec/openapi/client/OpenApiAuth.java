@@ -43,20 +43,32 @@ import tools.jackson.databind.json.JsonMapper;
  * OAuth2, token fetched from the flow's {@code tokenUrl} and cached until expiry). The
  * interactive {@code authorization_code} flow is deliberately out of scope for a headless
  * client — obtain the token elsewhere and pass it via {@code bearer}.
+ * <p>
+ * A caller that builds a request itself applies the same credentials through
+ * {@link OpenApiServiceClient#authenticate(org.eclipse.fennec.service.api.ServiceOperation, Target)}
+ * (which picks the satisfiable requirement alternative, as {@code invoke} does), or — for one
+ * known scheme — directly via {@link #apply(String, SecurityScheme, List, Target)}.
  */
 public abstract class OpenApiAuth {
 
 	OpenApiAuth() {
 	}
 
-	/** Where the client lets a credential write itself onto the outgoing request. */
-	interface Target {
+	/**
+	 * Where a credential writes itself onto an outgoing request. Values are passed unencoded;
+	 * the implementation encodes them for its location.
+	 */
+	public interface Target {
+		/** Sets a request header. */
 		void header(String name, String value);
 
+		/** Adds a query parameter. */
 		void query(String name, String value);
 
+		/** Adds a cookie. */
 		void cookie(String name, String value);
 
+		/** The HTTP client a credential may use for side requests (the OAuth2 token request). */
 		HttpClient http();
 	}
 
@@ -67,8 +79,10 @@ public abstract class OpenApiAuth {
 	 * @param scheme     the declared scheme the credential must satisfy
 	 * @param scopes     the scopes the operation's security requirement demands
 	 * @param target     sink for the header/query/cookie the credential decides on
+	 * @throws ServiceInvocationException if the credential cannot satisfy the scheme, or a token
+	 *                                    request fails
 	 */
-	abstract void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target);
+	public abstract void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target);
 
 	/** An API key, placed in the header, query parameter or cookie the scheme declares ({@code apiKey}). */
 	public static OpenApiAuth apiKey(String key) {
@@ -112,7 +126,7 @@ public abstract class OpenApiAuth {
 		}
 
 		@Override
-		void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
+		public void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
 			if (scheme.getType() != SecuritySchemeType.API_KEY) {
 				throw mismatch("apiKey", schemeName, scheme);
 			}
@@ -142,7 +156,7 @@ public abstract class OpenApiAuth {
 		}
 
 		@Override
-		void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
+		public void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
 			if (scheme.getType() != SecuritySchemeType.HTTP || !"basic".equalsIgnoreCase(scheme.getScheme())) {
 				throw mismatch("basic", schemeName, scheme);
 			}
@@ -159,7 +173,7 @@ public abstract class OpenApiAuth {
 		}
 
 		@Override
-		void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
+		public void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
 			// every literal is listed (no default) so a new one upstream breaks the build, not the wire
 			boolean accepted = switch (scheme.getType()) {
 			case HTTP -> "bearer".equalsIgnoreCase(scheme.getScheme());
@@ -189,7 +203,7 @@ public abstract class OpenApiAuth {
 		}
 
 		@Override
-		synchronized void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
+		public synchronized void apply(String schemeName, SecurityScheme scheme, List<String> scopes, Target target) {
 			if (scheme.getType() != SecuritySchemeType.OAUTH2) {
 				throw mismatch("clientCredentials", schemeName, scheme);
 			}

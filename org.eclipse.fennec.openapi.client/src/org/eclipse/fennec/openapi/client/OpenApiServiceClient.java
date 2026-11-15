@@ -351,7 +351,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 			}
 		}
 
-		applyAuth(op, headers, query);
+		authenticate(op, target(headers, query));
 
 		java.net.URI target = java.net.URI.create(baseUri.toString().replaceAll("/$", "") + path
 				+ (query.isEmpty() ? "" : "?" + query));
@@ -382,11 +382,18 @@ public final class OpenApiServiceClient implements ServiceClient {
 	// --- authentication -------------------------------------------------------------------------
 
 	/**
-	 * Satisfies the operation's effective security: the first requirement alternative whose
-	 * schemes all have registered credentials wins (an empty alternative — anonymous allowed —
-	 * matches trivially). Required-but-unregistered credentials fail here, before any HTTP.
+	 * Applies the registered credentials an operation's effective security demands to a request
+	 * the caller builds itself — exactly as {@link #invoke} does: the first requirement
+	 * alternative whose schemes all have registered credentials wins (an empty alternative —
+	 * anonymous allowed — matches trivially, writing nothing).
+	 *
+	 * @param operation the operation the request is for
+	 * @param target    where the credentials are written
+	 * @throws ServiceInvocationException if authentication is required but no alternative is
+	 *                                    satisfiable with the registered credentials
 	 */
-	private void applyAuth(OpenApiOperation op, Map<String, String> headers, StringBuilder query) {
+	public void authenticate(ServiceOperation operation, OpenApiAuth.Target target) {
+		OpenApiOperation op = openApi(operation);
 		List<Map<String, List<String>>> alternatives = op.security();
 		if (alternatives.isEmpty()) {
 			return;
@@ -401,8 +408,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 					throw new ServiceInvocationException("Operation '" + op.name()
 							+ "' requires undeclared security scheme '" + requirement.getKey() + "'");
 				}
-				auth.get(requirement.getKey()).apply(requirement.getKey(), scheme,
-						requirement.getValue(), target(headers, query));
+				auth.get(requirement.getKey()).apply(requirement.getKey(), scheme, requirement.getValue(), target);
 			}
 			return;
 		}
