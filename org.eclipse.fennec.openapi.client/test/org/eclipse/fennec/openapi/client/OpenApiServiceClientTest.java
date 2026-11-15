@@ -26,6 +26,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.openapi.ecore.OpenApiImporter;
 import org.eclipse.fennec.openapi.ecore.OpenApiModel;
+import org.eclipse.fennec.service.api.HttpStatusException;
 import org.eclipse.fennec.service.api.ServiceInvocationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -171,9 +172,10 @@ class OpenApiServiceClientTest {
 	}
 
 	@Test
-	@DisplayName("an HTTP error status becomes a ServiceInvocationException")
+	@DisplayName("an HTTP error status becomes an HttpStatusException with status and body (#97)")
 	void errorStatusBecomesException() {
 		status.set(404);
+		responseBody.set("{\"message\":\"Pet not found\"}");
 		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
 			EClass requestType = model.operation("getPet").requestType();
 			EObject request = EcoreUtil.create(requestType);
@@ -181,7 +183,13 @@ class OpenApiServiceClientTest {
 
 			assertThatThrownBy(() -> client.invoke("getPet", request))
 					.isInstanceOf(ServiceInvocationException.class)
-					.hasMessageContaining("404");
+					.hasMessageContaining("404")
+					.isInstanceOfSatisfying(HttpStatusException.class, e -> {
+						assertThat(e.status()).isEqualTo(404);
+						assertThat(e.operationName()).isEqualTo("getPet");
+						assertThat(e.bodyText()).isEqualTo("{\"message\":\"Pet not found\"}");
+						assertThat(e.contentType()).contains("application/json");
+					});
 			assertThat(client.unwrap(HttpClient.class)).isPresent();
 		}
 	}

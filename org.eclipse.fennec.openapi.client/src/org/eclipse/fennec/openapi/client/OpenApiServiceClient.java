@@ -39,6 +39,7 @@ import org.eclipse.fennec.model.openapi.SecurityScheme;
 import org.eclipse.fennec.openapi.ecore.OpenApiAnnotations;
 import org.eclipse.fennec.openapi.ecore.OpenApiModel;
 import org.eclipse.fennec.openapi.ecore.OpenApiOperation;
+import org.eclipse.fennec.service.api.HttpStatusException;
 import org.eclipse.fennec.service.api.ServiceClient;
 import org.eclipse.fennec.service.api.ServiceInvocationException;
 import org.eclipse.fennec.service.api.ServiceOperation;
@@ -54,7 +55,8 @@ import tools.jackson.databind.json.JsonMapper;
  * drive URL templating, query string, headers and body. JSON payloads are (de)serialized
  * through the Fennec codec; the transport is the JDK {@link HttpClient}.
  * <p>
- * Request-response, {@code application/json}. {@link #invoke} answers a single object; an
+ * Request-response, {@code application/json}. An HTTP error status ({@code >= 400}) is thrown as
+ * {@link HttpStatusException} carrying the status and the response body. {@link #invoke} answers a single object; an
  * operation whose answer is a {@linkplain OpenApiOperation#responseMany() JSON array} is invoked
  * through {@link #invokeMany}, which answers the elements in order; one whose answer is a scalar
  * ({@link OpenApiOperation#responseDataType()}) through {@link #invokeValue}.
@@ -296,8 +298,9 @@ public final class OpenApiServiceClient implements ServiceClient {
 			throw new ServiceInvocationException("Transport failed for " + op.name(), e);
 		}
 		if (response.statusCode() >= 400) {
-			throw new ServiceInvocationException("Operation '" + op.name() + "' failed: HTTP "
-					+ response.statusCode() + " — " + snippet(response.body()));
+			throw new HttpStatusException("Operation '" + op.name() + "' failed: HTTP "
+					+ response.statusCode() + " — " + snippet(response.body()), op.name(), response.statusCode(),
+					response.body(), response.headers().firstValue("Content-Type").orElse(null));
 		}
 		return response;
 	}
