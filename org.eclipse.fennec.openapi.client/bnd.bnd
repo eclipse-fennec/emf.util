@@ -26,4 +26,7 @@ Bundle-Description: A ServiceClient implementation that invokes OpenAPI operatio
 	org.eclipse.fennec.codec.openapi;version=latest,\
 	org.eclipse.fennec.codec.jsonschema;version=latest,\
 	org.eclipse.fennec.codec.metadata;version=latest,\
-	com.fasterxml.jackson.core.jackson-annotations;version=latest
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.eclipse.fennec.codec.yaml;version=latest,\
+	tools.jackson.dataformat.jackson-dataformat-yaml;version=latest,\
+	org.snakeyaml.engine;version=latest

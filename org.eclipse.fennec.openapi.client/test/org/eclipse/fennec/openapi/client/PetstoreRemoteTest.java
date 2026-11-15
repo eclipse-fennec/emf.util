@@ -19,13 +19,16 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.openapi.ecore.OpenApiImporter;
 import org.eclipse.fennec.openapi.ecore.OpenApiModel;
 import org.eclipse.fennec.openapi.ecore.OpenApiOperation;
+import org.eclipse.fennec.service.api.HttpStatusException;
 import org.eclipse.fennec.service.api.ServiceInvocationException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +53,7 @@ class PetstoreRemoteTest {
 
 	@BeforeAll
 	static void importLiveDocument() {
-		model = OpenApiImporter.fromJson(fetchDocumentOrSkip());
+		model = OpenApiImporter.fromJson(fetchDocumentOrSkip("/openapi.json"));
 	}
 
 	@Test
@@ -140,6 +143,85 @@ class PetstoreRemoteTest {
 		}
 	}
 
+	@Test
+	@DisplayName("the live YAML document imports to the same operations as the JSON one (#99)")
+	void importsLiveYamlDocument() {
+		OpenApiModel yaml = OpenApiImporter.fromYaml(fetchDocumentOrSkip("/openapi.yaml"));
+		assertThat(yaml.operations()).extracting(OpenApiOperation::name)
+				.containsExactlyInAnyOrderElementsOf(model.operations().stream().map(OpenApiOperation::name).toList());
+		assertThat(yaml.operation("findPetsByStatus").responseMany()).isTrue();
+	}
+
+	@Test
+	@DisplayName("findPetsByStatus answers a list of pets (#95)")
+	@SuppressWarnings({ "resource", "unchecked" }) // fluent withAuth(...) chain trips ECJ's resource-leak analysis
+	void findsPetsByStatus() {
+		OpenApiOperation find = model.operation("findPetsByStatus");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)
+				.withAuth("api_key", OpenApiAuth.apiKey("special-key"))
+				.withAuth("petstore_auth", OpenApiAuth.bearer("special-key"))) {
+			EObject request = EcoreUtil.create(find.requestType());
+			request.eSet(find.requestType().getEStructuralFeature("status"),
+					coerceLiteral(find.requestType(), "status", "available"));
+			List<EObject> pets = callOrSkip(() -> client.invokeMany(find, request));
+
+			assertThat(pets).allSatisfy(pet -> assertThat(pet.eClass().getName()).isEqualTo("Pet"));
+		}
+	}
+
+	@Test
+	@DisplayName("findPetsByTags sends an array query parameter exploded (#98)")
+	@SuppressWarnings({ "resource", "unchecked" }) // fluent withAuth(...) chain trips ECJ's resource-leak analysis
+	void findsPetsByTags() {
+		OpenApiOperation find = model.operation("findPetsByTags");
+		assertThat(find.requestType().getEStructuralFeature("tags").isMany()).isTrue();
+		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)
+				.withAuth("api_key", OpenApiAuth.apiKey("special-key"))
+				.withAuth("petstore_auth", OpenApiAuth.bearer("special-key"))) {
+			EObject request = EcoreUtil.create(find.requestType());
+			((List<Object>) request.eGet(find.requestType().getEStructuralFeature("tags"))).addAll(List.of("tag1", "tag2"));
+			List<EObject> pets = callOrSkip(() -> client.invokeMany(find, request));
+
+			assertThat(pets).allSatisfy(pet -> assertThat(pet.eClass().getName()).isEqualTo("Pet"));
+		}
+	}
+
+	@Test
+	@DisplayName("loginUser answers a string (#96)")
+	void logsIn() {
+		OpenApiOperation login = model.operation("loginUser");
+		assertThat(login.responseDataType()).isNotNull();
+		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)) {
+			EObject request = EcoreUtil.create(login.requestType());
+			request.eSet(login.requestType().getEStructuralFeature("username"), "fennec");
+			request.eSet(login.requestType().getEStructuralFeature("password"), "fennec");
+			Object session = callOrSkip(() -> client.invokeValue(login, request));
+
+			assertThat(session).isInstanceOf(String.class);
+			assertThat((String) session).isNotBlank();
+		}
+	}
+
+	@Test
+	@DisplayName("an unknown pet answers an HttpStatusException with status and body (#97)")
+	@SuppressWarnings("resource") // fluent withAuth(...) chain trips ECJ's resource-leak analysis
+	void unknownPetCarriesStatus() {
+		OpenApiOperation getPet = model.operation("getPetById");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(BASE, model)
+				.withAuth("api_key", OpenApiAuth.apiKey("special-key"))) {
+			HttpStatusException failure = null;
+			try {
+				client.invoke(getPet, petIdRequest(getPet, 987_654_321L));
+			} catch (HttpStatusException e) {
+				failure = e;
+			}
+			assumeTrue(failure != null, "pet 987654321 exists right now");
+			assumeTrue(failure.status() < 500, "petstore is down: " + failure.getMessage());
+			assertThat(failure.status()).isEqualTo(404);
+			assertThat(failure.bodyText()).isNotEmpty();
+		}
+	}
+
 	// --- helpers -----------------------------------------------------------------------------
 
 	private static EObject petIdRequest(OpenApiOperation getPet, long id) {
@@ -147,6 +229,24 @@ class PetstoreRemoteTest {
 		request.eSet(getPet.requestType().getEStructuralFeature("petId"),
 				coerce(getPet.requestType(), "petId", id));
 		return request;
+	}
+
+	/** Runs a call; a server-side failure (HTTP 5xx) skips the test instead of failing it. */
+	private static <T> T callOrSkip(Supplier<T> call) {
+		try {
+			return call.get();
+		} catch (HttpStatusException e) {
+			assumeTrue(e.status() < 500, "petstore is down: " + e.getMessage());
+			throw e;
+		}
+	}
+
+	/** An enum-typed feature takes its literal, anything else the string. */
+	private static Object coerceLiteral(EClass type, String feature, String literal) {
+		if (type.getEStructuralFeature(feature).getEType() instanceof EEnum eEnum) {
+			return eEnum.getEEnumLiteralByLiteral(literal).getInstance();
+		}
+		return literal;
 	}
 
 	/** Coerces the id to whatever numeric type the generated feature uses. */
@@ -160,10 +260,10 @@ class PetstoreRemoteTest {
 		};
 	}
 
-	private static byte[] fetchDocumentOrSkip() {
+	private static byte[] fetchDocumentOrSkip(String path) {
 		try (HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()) {
 			HttpResponse<byte[]> response = http.send(
-					HttpRequest.newBuilder(URI.create(BASE + "/openapi.json"))
+					HttpRequest.newBuilder(URI.create(BASE + path))
 							.timeout(Duration.ofSeconds(15)).GET().build(),
 					HttpResponse.BodyHandlers.ofByteArray());
 			assumeTrue(response.statusCode() == 200, "petstore returned HTTP " + response.statusCode());

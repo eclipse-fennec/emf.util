@@ -269,6 +269,15 @@ class OpenApiServiceClientTest {
 	}
 
 	@Test
+	@DisplayName("a scalar labelled JSON that does not parse is read as plain text (#96, Swagger petstore)")
+	void scalarMislabelledAsJson() {
+		responseBody.set("Logged in user session: 4711");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			assertThat(client.invokeValue("loginUser", null)).isEqualTo("Logged in user session: 4711");
+		}
+	}
+
+	@Test
 	@DisplayName("a scalar that does not fit the schema type fails clearly (#96)")
 	void scalarMismatch() {
 		responseBody.set("\"many\"");

@@ -191,7 +191,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 	 * Invokes an operation whose answer is a scalar ({@link OpenApiOperation#responseDataType()}):
 	 * the value typed by the schema — {@link String}, {@link Integer}/{@link Long},
 	 * {@link Float}/{@link Double}, {@link Boolean} — read from JSON, or from plain text when the
-	 * answer is not JSON. For an array of scalars ({@link OpenApiOperation#responseMany()}) the
+	 * answer is not JSON (also when it is labelled JSON but does not parse). For an array of scalars ({@link OpenApiOperation#responseMany()}) the
 	 * answer is a {@code List} of such values, in order. An empty body is {@code null} (an empty
 	 * list for an array).
 	 *
@@ -211,9 +211,9 @@ public final class OpenApiServiceClient implements ServiceClient {
 			return op.responseMany() ? List.of() : null;
 		}
 		String text = new String(body, StandardCharsets.UTF_8);
-		JsonNode json = isJson(response) || op.responseMany() ? parseJson(op, text) : null;
 		if (op.responseMany()) {
-			if (json == null || !json.isArray()) {
+			JsonNode json = parseJson(op, text);
+			if (!json.isArray()) {
 				throw new ServiceInvocationException("Operation '" + op.name() + "' should answer a JSON array, got: "
 						+ snippet(body));
 			}
@@ -223,6 +223,8 @@ public final class OpenApiServiceClient implements ServiceClient {
 			}
 			return values;
 		}
+		// servers label plain text as JSON (the Swagger petstore's loginUser does): not parseable → text
+		JsonNode json = isJson(response) ? parseJsonOrNull(text) : null;
 		return json == null ? convert(op, type, text) : scalar(op, type, json);
 	}
 
@@ -241,6 +243,14 @@ public final class OpenApiServiceClient implements ServiceClient {
 			return JSON.readTree(text);
 		} catch (JacksonException e) {
 			throw new ServiceInvocationException("Could not parse the JSON answer of " + op.name(), e);
+		}
+	}
+
+	private static JsonNode parseJsonOrNull(String text) {
+		try {
+			return JSON.readTree(text);
+		} catch (JacksonException e) {
+			return null;
 		}
 	}
 
