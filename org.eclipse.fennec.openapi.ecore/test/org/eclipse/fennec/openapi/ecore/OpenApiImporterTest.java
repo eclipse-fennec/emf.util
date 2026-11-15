@@ -303,4 +303,39 @@ class OpenApiImporterTest {
 		assertThat(model.operation("getPet").responseDataType()).isNull();
 		assertThat(model.operation("listPets").responseDataType()).isNull();
 	}
+
+	@Test
+	@DisplayName("an array parameter is many-valued, typed by its items, with declared style/explode (#98)")
+	void arrayParameters() {
+		String doc = """
+				{
+				  "openapi": "3.0.3",
+				  "info": { "title": "Arrays", "version": "1.0" },
+				  "paths": { "/pets/findByTags": { "get": { "operationId": "findPetsByTags",
+				    "parameters": [
+				      { "name": "tags", "in": "query", "schema": { "type": "array", "items": { "type": "string" } } },
+				      { "name": "ids", "in": "query", "style": "pipeDelimited", "explode": false,
+				        "schema": { "type": "array", "items": { "type": "integer" } } },
+				      { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+				    ],
+				    "responses": { "200": { "description": "ok" } } } } }
+				}
+				""";
+		EClass request = OpenApiImporter.fromJson(doc.getBytes(StandardCharsets.UTF_8))
+				.operation("findPetsByTags").requestType();
+
+		EStructuralFeature tags = request.getEStructuralFeature("tags");
+		assertThat(tags.isMany()).isTrue();
+		assertThat(tags.getEType()).isSameAs(EcorePackage.eINSTANCE.getEString());
+		assertThat(OpenApiAnnotations.style(tags)).isNull();
+		assertThat(OpenApiAnnotations.explode(tags)).isNull();
+
+		EStructuralFeature ids = request.getEStructuralFeature("ids");
+		assertThat(ids.isMany()).isTrue();
+		assertThat(ids.getEType()).isSameAs(EcorePackage.eINSTANCE.getELong());
+		assertThat(OpenApiAnnotations.style(ids)).isEqualTo("pipeDelimited");
+		assertThat(OpenApiAnnotations.explode(ids)).isFalse();
+
+		assertThat(request.getEStructuralFeature("limit").isMany()).isFalse();
+	}
 }

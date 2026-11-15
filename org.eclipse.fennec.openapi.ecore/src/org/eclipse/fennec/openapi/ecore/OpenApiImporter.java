@@ -40,6 +40,7 @@ import org.eclipse.fennec.model.openapi.OpenAPI;
 import org.eclipse.fennec.model.openapi.OpenApiPackage;
 import org.eclipse.fennec.model.openapi.Operation;
 import org.eclipse.fennec.model.openapi.Parameter;
+import org.eclipse.fennec.model.openapi.ParameterStyle;
 import org.eclipse.fennec.model.openapi.PathItem;
 import org.eclipse.fennec.model.openapi.RequestBody;
 import org.eclipse.fennec.model.openapi.Response;
@@ -275,7 +276,9 @@ public final class OpenApiImporter {
 
 	/**
 	 * The request type: the body EClass itself when there are no parameters, otherwise a synthetic
-	 * {@code <Name>Request} EClass folding the parameters (annotated {@code in=…}) + optional body.
+	 * {@code <Name>Request} EClass folding the parameters (annotated {@code in=…}, and
+	 * {@code style}/{@code explode} when declared; an {@code array} parameter becomes a many-valued
+	 * attribute of its item type) + optional body.
 	 */
 	private EClass requestType(String operation, List<Parameter> parameters, EClass body) {
 		if (parameters == null || parameters.isEmpty()) {
@@ -290,9 +293,22 @@ public final class OpenApiImporter {
 			}
 			EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
 			attribute.setName(parameter.getName());
-			attribute.setEType(parameterType(parameter.getSchema()));
+			Schema schema = parameter.getSchema();
+			if (schema != null && "array".equals(schema.getType())) {
+				// an array parameter: many-valued, typed by its items (serialized per style/explode)
+				attribute.setEType(parameterType(schema.getItems()));
+				attribute.setUpperBound(EStructuralFeature.UNBOUNDED_MULTIPLICITY);
+			} else {
+				attribute.setEType(parameterType(schema));
+			}
 			attribute.setLowerBound(parameter.isRequired() ? 1 : 0);
 			OpenApiAnnotations.setIn(attribute, parameter.getIn().getLiteral());
+			if (parameter.getStyle() != null && parameter.getStyle() != ParameterStyle.NULL) {
+				OpenApiAnnotations.setStyle(attribute, parameter.getStyle().getLiteral());
+			}
+			if (parameter.getExplode() != null) {
+				OpenApiAnnotations.setExplode(attribute, parameter.getExplode());
+			}
 			request.getEStructuralFeatures().add(attribute);
 		}
 		if (body != null) {

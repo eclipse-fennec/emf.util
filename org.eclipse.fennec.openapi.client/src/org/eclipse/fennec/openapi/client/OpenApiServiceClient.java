@@ -12,13 +12,13 @@ package org.eclipse.fennec.openapi.client;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -328,14 +328,21 @@ public final class OpenApiServiceClient implements ServiceClient {
 				if (!request.eIsSet(feature) && feature.getLowerBound() == 0) {
 					continue; // optional parameter not provided
 				}
-				String value = String.valueOf(request.eGet(feature));
+				List<String> values = values(request, feature);
+				if (values.isEmpty()) {
+					continue; // an empty array is not sent
+				}
+				String name = feature.getName();
+				String style = OpenApiAnnotations.style(feature);
+				Boolean explode = OpenApiAnnotations.explode(feature);
 				switch (in) {
-				case OpenApiAnnotations.IN_PATH -> path = path.replace("{" + feature.getName() + "}", encode(value));
+				case OpenApiAnnotations.IN_PATH -> path = path.replace("{" + name + "}",
+						ParameterSerializer.path(name, values, style, explode));
 				case OpenApiAnnotations.IN_QUERY -> query.append(query.isEmpty() ? "" : "&")
-						.append(encode(feature.getName())).append('=').append(encode(value));
-				case OpenApiAnnotations.IN_HEADER -> headers.put(feature.getName(), value);
+						.append(ParameterSerializer.query(name, values, style, explode));
+				case OpenApiAnnotations.IN_HEADER -> headers.put(name, ParameterSerializer.header(name, values, style));
 				case OpenApiAnnotations.IN_COOKIE -> headers.merge("Cookie",
-						feature.getName() + "=" + value, (a, b) -> a + "; " + b);
+						ParameterSerializer.cookie(name, values, style, explode), (a, b) -> a + "; " + b);
 				default -> throw new ServiceInvocationException("Unknown parameter location: " + in);
 				}
 			}
@@ -357,6 +364,19 @@ public final class OpenApiServiceClient implements ServiceClient {
 			builder.method(op.httpMethod(), BodyPublishers.noBody());
 		}
 		return builder.build();
+	}
+
+	/** A parameter's value(s) as literals: one for a single-valued feature, each element for an array. */
+	private static List<String> values(EObject request, EStructuralFeature feature) {
+		Object value = request.eGet(feature);
+		List<?> raw = feature.isMany() ? (List<?>) value : Collections.singletonList(value);
+		List<String> literals = new ArrayList<>(raw.size());
+		for (Object element : raw) {
+			literals.add(feature.getEType() instanceof EDataType type
+					? EcoreUtil.convertToString(type, element)
+					: String.valueOf(element));
+		}
+		return literals;
 	}
 
 	// --- authentication -------------------------------------------------------------------------
@@ -447,7 +467,7 @@ public final class OpenApiServiceClient implements ServiceClient {
 	// --- misc ----------------------------------------------------------------------------------
 
 	private static String encode(String value) {
-		return URLEncoder.encode(value, StandardCharsets.UTF_8);
+		return ParameterSerializer.encodeQuery(value);
 	}
 
 	private static String snippet(byte[] body) {

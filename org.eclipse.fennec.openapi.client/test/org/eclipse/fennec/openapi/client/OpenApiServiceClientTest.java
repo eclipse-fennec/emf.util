@@ -76,6 +76,14 @@ class OpenApiServiceClientTest {
 			    "/tags": { "get": { "operationId": "listTags",
 			      "responses": { "200": { "description": "ok", "content": { "application/json": {
 			        "schema": { "type": "array", "items": { "type": "string" } } } } } } } },
+			    "/pets/findByTags": { "get": { "operationId": "findPetsByTags",
+			      "parameters": [
+			        { "name": "tags", "in": "query", "schema": { "type": "array", "items": { "type": "string" } } },
+			        { "name": "ids", "in": "query", "style": "form", "explode": false,
+			          "schema": { "type": "array", "items": { "type": "integer" } } }
+			      ],
+			      "responses": { "200": { "description": "ok", "content": { "application/json": {
+			        "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } } } } } } },
 			    "/pets/{petId}": {
 			      "get": {
 			        "operationId": "getPet",
@@ -273,6 +281,34 @@ class OpenApiServiceClientTest {
 					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invokeValue");
 			assertThatThrownBy(() -> client.invokeValue("listPets", null))
 					.isInstanceOf(ServiceInvocationException.class).hasMessageContaining("invokeMany");
+		}
+	}
+
+	@Test
+	@DisplayName("array query parameters follow style/explode: tags=a&tags=b, ids=1,2 (#98)")
+	@SuppressWarnings("unchecked")
+	void arrayQueryParameters() {
+		responseBody.set("[]");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			EClass requestType = model.operation("findPetsByTags").requestType();
+			EObject request = EcoreUtil.create(requestType);
+			((List<Object>) request.eGet(requestType.getEStructuralFeature("tags"))).addAll(List.of("a", "b c"));
+			((List<Object>) request.eGet(requestType.getEStructuralFeature("ids"))).addAll(List.of(1L, 2L));
+
+			client.invokeMany("findPetsByTags", request);
+
+			assertThat(lastPathAndQuery.get()).isEqualTo("/pets/findByTags?tags=a&tags=b+c&ids=1,2");
+		}
+	}
+
+	@Test
+	@DisplayName("an empty optional array parameter is not sent (#98)")
+	void emptyArrayParameterIsOmitted() {
+		responseBody.set("[]");
+		try (OpenApiServiceClient client = new OpenApiServiceClient(baseUri(), model)) {
+			EClass requestType = model.operation("findPetsByTags").requestType();
+			client.invokeMany("findPetsByTags", EcoreUtil.create(requestType));
+			assertThat(lastPathAndQuery.get()).isEqualTo("/pets/findByTags");
 		}
 	}
 }
