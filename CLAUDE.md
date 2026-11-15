@@ -198,9 +198,18 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
 
 - **`org.eclipse.fennec.soap.client`** — `SoapServiceClient` (JDK `HttpClient` + `SoapResource`
   marshalling; `withSoapAction`). Tested end-to-end against a local JDK `HttpServer`.
-- **`org.eclipse.fennec.openapi.ecore`** — `OpenApiImporter`: loads the document via the
-  **fennecCodec pipeline** (`OpenApiResourceFactoryImpl`; `components/schemas` → `EPackage` happens
-  during load, read via `components.getSchemasPackage()`), then links path operations to EClasses.
+- **`org.eclipse.fennec.openapi.ecore`** — `OpenApiImporter`: loads OpenAPI **3.0, 3.1 and 3.2**
+  (#102) via the **fennecCodec `oas` model** (`org.eclipse.fennec.model.oas`, one
+  `OasResourceFactoryImpl` per `OasVersion`, picked by sniffing the `openapi` member; Swagger 2.0 is
+  rejected). The codec derives the Ecore during load (`components.getSchemasPackage()`, inline
+  schemas in its `inline` sub-package) and links every use site to its classifier
+  (`Schema.getClassifier()`), every `$ref` to its `target` and every operation to its `method`; the
+  importer only links path operations to those classifiers — **never re-derive types from the schema
+  text**. Consequence: data types are the codec's (`ELongObject`, `EIntegerObject`, … not `ELong`),
+  and `OpenApiModel.generatedPackages()` (schemas + sub-packages + requests) is what must be
+  registered/re-namespaced. Path-item parameters are merged in; explicit `security: []` lifts the
+  global requirement; 3.2 `query`/`additionalOperations` are operations, `querystring` parameters
+  and webhooks are skipped with a diagnostic. Needs a fennecCodec snapshot ≥ 2026-11-15 (emf.codec#321).
   Parameters fold into a **synthetic request EClass** (`<Name>Request`, features annotated
   `in=path|query|header|cookie|body`, source `http://eclipse.org/fennec/openapi`); body-only ops use
   the body EClass directly; array responses resolve to the item EClass + `responseMany`; scalar

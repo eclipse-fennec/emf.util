@@ -21,6 +21,8 @@ Private-Package: \
 	org.eclipse.fennec.openapi.client;version=snapshot,\
 	org.eclipse.fennec.openapi.ecore;version=snapshot,\
 	org.eclipse.fennec.openapi.model;version=latest,\
+	org.eclipse.fennec.codec.openapi;version=latest,\
+	org.eclipse.fennec.codec.jsonschema.model;version=latest,\
 	org.eclipse.fennec.codec;version=latest,\
 	org.eclipse.fennec.codec.yaml;version=latest,\
 	org.eclipse.fennec.codec.api;version=latest,\

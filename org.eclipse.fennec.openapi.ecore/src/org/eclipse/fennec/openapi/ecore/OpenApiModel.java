@@ -9,6 +9,7 @@
  */
 package org.eclipse.fennec.openapi.ecore;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,13 +17,14 @@ import java.util.Map;
 
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
-import org.eclipse.fennec.model.openapi.OpenAPI;
-import org.eclipse.fennec.model.openapi.SecurityScheme;
+import org.eclipse.fennec.model.oas.OpenAPI;
+import org.eclipse.fennec.model.oas.SecurityScheme;
 
 /**
- * The result of importing an OpenAPI document: the parsed {@link OpenAPI} model, the
- * {@link EPackage} generated from {@code components/schemas} (by the codec's JSON-Schema
- * pipeline), the synthetic requests package (parameter-folding EClasses), the declared
+ * The result of importing an OpenAPI 3.0, 3.1 or 3.2 description: the parsed {@link OpenAPI} model
+ * (the codec's {@code oas} model, for every version), the {@link EPackage} the codec derived from
+ * {@code components/schemas} (with the classifiers of inline schemas in its {@code inline}
+ * sub-package), the synthetic requests package (parameter-folding EClasses), the declared
  * {@code components/securitySchemes} (by name, declaration order) and the resolved
  * {@link OpenApiOperation}s (each carrying its effective
  * {@linkplain OpenApiOperation#security() security requirements}).
@@ -54,13 +56,30 @@ public record OpenApiModel(OpenAPI document, EPackage schemasPackage, EPackage r
 		return null;
 	}
 
+	/**
+	 * The generated packages: the schemas package, its sub-packages (inline schemas) and the
+	 * requests package — what a metadata registry or package registry has to know.
+	 */
+	public List<EPackage> generatedPackages() {
+		List<EPackage> packages = new ArrayList<>();
+		addWithSubpackages(packages, schemasPackage);
+		addWithSubpackages(packages, requestsPackage);
+		return packages;
+	}
+
 	/** Registers the generated packages into a {@link ResourceSet}'s package registry. */
 	public void registerInto(ResourceSet resourceSet) {
-		if (schemasPackage != null && schemasPackage.getNsURI() != null) {
-			resourceSet.getPackageRegistry().put(schemasPackage.getNsURI(), schemasPackage);
+		for (EPackage ePackage : generatedPackages()) {
+			if (ePackage.getNsURI() != null) {
+				resourceSet.getPackageRegistry().put(ePackage.getNsURI(), ePackage);
+			}
 		}
-		if (requestsPackage != null && requestsPackage.getNsURI() != null) {
-			resourceSet.getPackageRegistry().put(requestsPackage.getNsURI(), requestsPackage);
+	}
+
+	private static void addWithSubpackages(List<EPackage> packages, EPackage ePackage) {
+		if (ePackage != null) {
+			packages.add(ePackage);
+			ePackage.getESubpackages().forEach(sub -> addWithSubpackages(packages, sub));
 		}
 	}
 }

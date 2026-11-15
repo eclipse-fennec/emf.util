@@ -13,11 +13,15 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.URI;
@@ -26,41 +30,53 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EDataType;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.fennec.codec.openapi.OpenApiResourceFactoryImpl;
+import org.eclipse.fennec.codec.jsonschema.model.Schema;
+import org.eclipse.fennec.codec.jsonschema.model.SimpleType;
+import org.eclipse.fennec.codec.openapi.oas.OasResourceFactoryImpl;
+import org.eclipse.fennec.codec.openapi.oas.OasVersion;
 import org.eclipse.fennec.codec.resource.CodecResource;
 import org.eclipse.fennec.codec.yaml.YamlFormatProvider;
-import org.eclipse.fennec.model.openapi.Components;
-import org.eclipse.fennec.model.openapi.MediaType;
-import org.eclipse.fennec.model.openapi.OpenAPI;
-import org.eclipse.fennec.model.openapi.OpenApiPackage;
-import org.eclipse.fennec.model.openapi.Operation;
-import org.eclipse.fennec.model.openapi.Parameter;
-import org.eclipse.fennec.model.openapi.ParameterStyle;
-import org.eclipse.fennec.model.openapi.PathItem;
-import org.eclipse.fennec.model.openapi.RequestBody;
-import org.eclipse.fennec.model.openapi.Response;
-import org.eclipse.fennec.model.openapi.Schema;
-import org.eclipse.fennec.model.openapi.SecurityRequirement;
-import org.eclipse.fennec.model.openapi.SecurityScheme;
+import org.eclipse.fennec.model.oas.Components;
+import org.eclipse.fennec.model.oas.MediaType;
+import org.eclipse.fennec.model.oas.OasPackage;
+import org.eclipse.fennec.model.oas.OpenAPI;
+import org.eclipse.fennec.model.oas.Operation;
+import org.eclipse.fennec.model.oas.Parameter;
+import org.eclipse.fennec.model.oas.ParameterLocation;
+import org.eclipse.fennec.model.oas.ParameterStyle;
+import org.eclipse.fennec.model.oas.PathItem;
+import org.eclipse.fennec.model.oas.RequestBody;
+import org.eclipse.fennec.model.oas.Response;
+import org.eclipse.fennec.model.oas.SecurityRequirement;
+import org.eclipse.fennec.model.oas.SecurityScheme;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Derives {@link OpenApiOperation}s (plus their request/response {@link EClass}es) from an
- * OpenAPI 3 document — the REST counterpart of the WSDL/gRPC importers. The heavy lifting is
- * done by the Fennec codec: loading the document yields the {@code openapi.model} EMF
- * representation, and {@code components/schemas} is converted to an {@link EPackage} by the
- * JSON-Schema pipeline during load. This class only <b>links</b> the path operations to those
- * EClasses:
+ * OpenAPI 3.0, 3.1 or 3.2 description — the REST counterpart of the WSDL/gRPC importers. The
+ * heavy lifting is done by the Fennec codec: every version is read into its {@code oas} model
+ * ({@code org.eclipse.fennec.model.oas}), which derives the Ecore of the schemas during load
+ * ({@code components/schemas} → {@link Components#getSchemasPackage()}, inline schemas → its
+ * {@code inline} sub-package) and links every use site to its classifier
+ * ({@link Schema#getClassifier()}), every Reference Object to its {@code target} and every
+ * operation to its HTTP {@code method}. This class only <b>links</b> the path operations to those
+ * classifiers:
  * <ul>
  * <li>body-only operation → {@code requestType} is the body EClass itself;</li>
- * <li>operation with parameters → a <b>synthetic request EClass</b> ({@code <Name>Request}) whose
- * features carry {@code in=path|query|header|cookie} annotations, plus an optional {@code body}
- * containment reference — so a form UI / client can treat every request uniformly as one EObject;</li>
+ * <li>operation with parameters (its own and the path item's) → a <b>synthetic request EClass</b>
+ * ({@code <Name>Request}) whose features carry {@code in=path|query|header|cookie} annotations, plus
+ * an optional {@code body} containment reference — so a form UI / client can treat every request
+ * uniformly as one EObject;</li>
  * <li>response → the first 2xx (or {@code default}) {@code application/json} schema; a JSON array
  * resolves to its item EClass with {@link OpenApiOperation#responseMany()}; a scalar schema
  * ({@code string}, {@code integer}, {@code number}, {@code boolean}, or an array of them — also
@@ -68,7 +84,7 @@ import org.eclipse.fennec.model.openapi.SecurityScheme;
  * <li>security → {@code components/securitySchemes} is exposed on the model as-is; each
  * operation carries its effective requirements (own {@code security}, else the global one).</li>
  * </ul>
- * Inline (unnamed) schemas and non-JSON content are recorded as diagnostics, not resolved (v1).
+ * Non-JSON content, {@code querystring} parameters (3.2) and webhooks are skipped (diagnostics).
  */
 public final class OpenApiImporter {
 
@@ -79,6 +95,10 @@ public final class OpenApiImporter {
 	private static final String REQUESTS_NS = "http://eclipse.org/fennec/openapi/generated/requests";
 	/** Annotation source the codec's JSON-Schema converter stamps on generated features. */
 	private static final String JSONSCHEMA_SOURCE = "http://fennec.eclipse.org/jsonschema";
+	/** The top-level {@code openapi} member of a YAML description (unindented). */
+	private static final Pattern YAML_VERSION = Pattern
+			.compile("(?m)^[\"']?openapi[\"']?\\s*:\\s*[\"']?([^\"'\\s#]+)");
+	private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
 	private final List<String> diagnostics = new ArrayList<>();
 	private final Map<String, SecurityScheme> securitySchemes = new LinkedHashMap<>();
@@ -89,22 +109,22 @@ public final class OpenApiImporter {
 	private OpenApiImporter() {
 	}
 
-	/** Imports an OpenAPI 3 document in JSON. */
+	/** Imports an OpenAPI 3.0, 3.1 or 3.2 description in JSON. */
 	public static OpenApiModel fromJson(byte[] document) {
 		return doImport(document, "json");
 	}
 
-	/** Imports an OpenAPI 3 document in JSON from a stream. */
+	/** Imports an OpenAPI 3.0, 3.1 or 3.2 description in JSON from a stream. */
 	public static OpenApiModel fromJson(InputStream document) {
 		return fromJson(readAll(document));
 	}
 
-	/** Imports an OpenAPI 3 document in YAML. */
+	/** Imports an OpenAPI 3.0, 3.1 or 3.2 description in YAML. */
 	public static OpenApiModel fromYaml(byte[] document) {
 		return doImport(document, "yaml");
 	}
 
-	/** Imports an OpenAPI 3 document in YAML from a stream. */
+	/** Imports an OpenAPI 3.0, 3.1 or 3.2 description in YAML from a stream. */
 	public static OpenApiModel fromYaml(InputStream document) {
 		return fromYaml(readAll(document));
 	}
@@ -121,23 +141,24 @@ public final class OpenApiImporter {
 		schemasPackage = schemasPackage(openApi);
 		if (openApi.getComponents() != null) {
 			openApi.getComponents().getSecuritySchemes()
-					.forEach(entry -> securitySchemes.put(entry.getKey(), entry.getValue()));
+					.forEach(entry -> securitySchemes.put(entry.getKey(), target(entry.getValue())));
 		}
 		globalSecurity = requirements("document", openApi.getSecurity());
 
 		List<OpenApiOperation> operations = new ArrayList<>();
-		if (openApi.getPaths() != null) {
-			for (Map.Entry<String, PathItem> path : openApi.getPaths().entrySet()) {
-				PathItem item = path.getValue();
-				operation(operations, "GET", path.getKey(), item.getGet());
-				operation(operations, "PUT", path.getKey(), item.getPut());
-				operation(operations, "POST", path.getKey(), item.getPost());
-				operation(operations, "DELETE", path.getKey(), item.getDelete());
-				operation(operations, "OPTIONS", path.getKey(), item.getOptions());
-				operation(operations, "HEAD", path.getKey(), item.getHead());
-				operation(operations, "PATCH", path.getKey(), item.getPatch());
-				operation(operations, "TRACE", path.getKey(), item.getTrace());
+		for (Map.Entry<String, PathItem> path : openApi.getPaths()) {
+			PathItem item = target(path.getValue());
+			if (item == null) {
+				diagnostics.add("Path '" + path.getKey() + "': unresolved $ref '" + path.getValue().getRef() + "'");
+				continue;
 			}
+			for (Operation operation : item.getAllOperations()) {
+				operation(operations, path.getKey(), item, operation);
+			}
+		}
+		if (!openApi.getWebhooks().isEmpty()) {
+			diagnostics.add("webhooks are not imported (" + openApi.getWebhooks().size()
+					+ "): they are called by the API, not by a client");
 		}
 		return new OpenApiModel(openApi, schemasPackage, requestsPackage, securitySchemes, operations, diagnostics);
 	}
@@ -145,13 +166,13 @@ public final class OpenApiImporter {
 	// --- document loading (codec pipeline) ---------------------------------------------------
 
 	private OpenAPI load(byte[] document, String extension) {
-		// the codec reads YAML through its format provider; the JSON factory cannot parse YAML
-		OpenApiResourceFactoryImpl factory = "yaml".equals(extension)
-				? new OpenApiResourceFactoryImpl(new YamlFormatProvider(), OpenApiResourceFactoryImpl.CONTENT_TYPE_OPENAPI_YAML)
-				: new OpenApiResourceFactoryImpl();
+		boolean yaml = "yaml".equals(extension);
+		OasVersion version = version(document, yaml);
+		// the codec reads YAML through its format provider; the JSON syntax is the default
+		OasResourceFactoryImpl factory = new OasResourceFactoryImpl(version, yaml ? new YamlFormatProvider() : null);
 		Resource resource = factory.createResource(URI.createURI("import://openapi." + extension));
 		Map<String, Object> options = new LinkedHashMap<>();
-		options.put(CodecResource.CODEC_ROOT_TYPE, OpenApiPackage.Literals.OPEN_API);
+		options.put(CodecResource.CODEC_ROOT_TYPE, OasPackage.Literals.OPEN_API);
 		try {
 			resource.load(new ByteArrayInputStream(document), options);
 		} catch (IOException e) {
@@ -160,7 +181,36 @@ public final class OpenApiImporter {
 		if (resource.getContents().isEmpty() || !(resource.getContents().get(0) instanceof OpenAPI openApi)) {
 			throw new IllegalArgumentException("Document did not parse to an OpenAPI model");
 		}
+		// what the codec could not map (unresolved $refs, unconvertible inline schemas, ...)
+		resource.getWarnings().forEach(warning -> diagnostics.add("codec: " + warning.getMessage()));
 		return openApi;
+	}
+
+	/**
+	 * The OpenAPI version of a description, from its top-level {@code openapi} member — the codec
+	 * reads each version with its own resource.
+	 */
+	static OasVersion version(byte[] document, boolean yaml) {
+		String declared = null;
+		if (yaml) {
+			Matcher matcher = YAML_VERSION.matcher(new String(document, StandardCharsets.UTF_8));
+			declared = matcher.find() ? matcher.group(1) : null;
+		} else {
+			try {
+				JsonNode openapi = MAPPER.readTree(document).get("openapi");
+				declared = openapi == null || !openapi.isString() ? null : openapi.asString();
+			} catch (JacksonException e) {
+				throw new UncheckedIOException("Could not parse the OpenAPI document",
+						new IOException(e.getOriginalMessage(), e));
+			}
+		}
+		OasVersion version = OasVersion.of(declared);
+		if (version == null) {
+			throw new IllegalArgumentException(declared == null
+					? "Not an OpenAPI 3 description: no 'openapi' member"
+					: "OpenAPI '" + declared + "' is not supported: 3.0, 3.1 and 3.2 are");
+		}
+		return version;
 	}
 
 	/** The EPackage the codec generated from components/schemas (given an nsURI if the pipeline left none). */
@@ -207,45 +257,50 @@ public final class OpenApiImporter {
 						+ ": unresolved $ref '" + ref + "' — typed as " + feature.getEType().getName());
 			}
 		}
+		generated.getESubpackages().forEach(this::ensureTypedFeatures);
 	}
 
 	// --- operation linking -------------------------------------------------------------------
 
-	private void operation(List<OpenApiOperation> target, String method, String path, Operation operation) {
-		if (operation == null) {
+	private void operation(List<OpenApiOperation> target, String path, PathItem item, Operation operation) {
+		String method = operation.getMethod() == null ? null : operation.getMethod().toUpperCase(Locale.ROOT);
+		if (method == null) {
+			diagnostics.add("Path '" + path + "': operation without HTTP method skipped");
 			return;
 		}
 		String name = operation.getOperationId() == null || operation.getOperationId().isBlank()
 				? fallbackName(method, path)
 				: operation.getOperationId();
 
-		EClass body = bodyType(name, operation.getRequestBody());
-		EClass request = requestType(name, operation.getParameters(), body);
+		EClass body = bodyType(name, target(operation.getRequestBody()));
+		EClass request = requestType(name, parameters(name, item, operation), body);
 
 		EClass response = null;
 		EDataType responseValue = null;
 		boolean many = false;
 		Schema responseSchema = responseSchema(operation);
 		if (responseSchema != null) {
-			boolean array = "array".equals(responseSchema.getType()) && responseSchema.getItems() != null;
-			Schema single = array ? responseSchema.getItems() : responseSchema;
-			responseValue = scalarType(single);
-			if (responseValue == null) {
-				response = resolve(name, single);
+			EClassifier classifier = responseSchema.getClassifier();
+			if (classifier instanceof EClass eClass) {
+				response = eClass;
+			} else if (isValueType(classifier)) {
+				responseValue = (EDataType) classifier;
+			} else {
+				diagnostics.add("Operation '" + name + "': the response schema has no type a client can read");
 			}
-			many = array && (response != null || responseValue != null);
+			many = isArray(responseSchema) && (response != null || responseValue != null);
 		}
 		target.add(new OpenApiOperation(name, method, path, request, response, many, security(name, operation),
 				responseValue));
 	}
 
 	/**
-	 * The operation's effective security: its own {@code security} when declared, otherwise the
-	 * document's global one. (EMF cannot distinguish an absent list from an explicit
-	 * {@code security: []} — both fall back to the global requirements.)
+	 * The operation's effective security: its own {@code security} when declared — an explicit
+	 * {@code security: []} included, which lifts the global requirement — otherwise the document's
+	 * global one.
 	 */
 	private List<Map<String, List<String>>> security(String operation, Operation declared) {
-		if (declared.getSecurity().isEmpty()) {
+		if (!declared.isSetSecurity()) {
 			return globalSecurity;
 		}
 		return requirements("operation '" + operation + "'", declared.getSecurity());
@@ -270,17 +325,49 @@ public final class OpenApiImporter {
 
 	/** The JSON body EClass of the operation's requestBody, or {@code null}. */
 	private EClass bodyType(String operation, RequestBody requestBody) {
-		if (requestBody == null || requestBody.getContent() == null) {
+		if (requestBody == null) {
 			return null;
 		}
-		MediaType json = requestBody.getContent().get(JSON);
+		MediaType json = target(requestBody.getContent().get(JSON));
 		if (json == null) {
 			if (!requestBody.getContent().isEmpty()) {
 				diagnostics.add("Operation '" + operation + "': request body has no " + JSON + " content (v1 skips it)");
 			}
 			return null;
 		}
-		return resolve(operation, json.getSchema());
+		Schema schema = json.getSchema();
+		if (schema == null) {
+			return null;
+		}
+		if (!(schema.getClassifier() instanceof EClass eClass)) {
+			diagnostics.add("Operation '" + operation + "': request body is not a JSON object (v1 skips it)");
+			return null;
+		}
+		if (isArray(schema)) {
+			diagnostics.add("Operation '" + operation + "': request body is a JSON array (v1 skips it)");
+			return null;
+		}
+		return eClass;
+	}
+
+	/**
+	 * The parameters of an operation: the path item's, overridden by the operation's own of the
+	 * same name and location; {@code $ref}s resolved.
+	 */
+	private List<Parameter> parameters(String operation, PathItem item, Operation declared) {
+		Map<String, Parameter> parameters = new LinkedHashMap<>();
+		for (List<Parameter> level : List.of(item.getParameters(), declared.getParameters())) {
+			for (Parameter parameter : level) {
+				Parameter resolved = target(parameter);
+				if (resolved == null) {
+					diagnostics.add("Operation '" + operation + "': parameter $ref '" + parameter.getRef()
+							+ "' unresolved, skipped");
+					continue;
+				}
+				parameters.put(resolved.getIn() + ":" + resolved.getName(), resolved);
+			}
+		}
+		return new ArrayList<>(parameters.values());
 	}
 
 	/**
@@ -290,35 +377,42 @@ public final class OpenApiImporter {
 	 * attribute of its item type) + optional body.
 	 */
 	private EClass requestType(String operation, List<Parameter> parameters, EClass body) {
-		if (parameters == null || parameters.isEmpty()) {
+		if (parameters.isEmpty()) {
 			return body;
 		}
 		EClass request = EcoreFactory.eINSTANCE.createEClass();
 		request.setName(capitalize(operation) + "Request");
 		for (Parameter parameter : parameters) {
-			if (parameter.getName() == null || parameter.getIn() == null) {
+			if (parameter.getName() == null || parameter.getIn() == null || parameter.getIn() == ParameterLocation.NULL) {
 				diagnostics.add("Operation '" + operation + "': parameter without name/in skipped");
+				continue;
+			}
+			if (parameter.getIn() == ParameterLocation.QUERYSTRING) {
+				diagnostics.add("Operation '" + operation + "': querystring parameter '" + parameter.getName()
+						+ "' skipped (v1)");
 				continue;
 			}
 			EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
 			attribute.setName(parameter.getName());
 			Schema schema = parameter.getSchema();
-			if (schema != null && "array".equals(schema.getType())) {
+			attribute.setEType(parameterType(schema));
+			if (schema != null && isArray(schema)) {
 				// an array parameter: many-valued, typed by its items (serialized per style/explode)
-				attribute.setEType(parameterType(schema.getItems()));
 				attribute.setUpperBound(EStructuralFeature.UNBOUNDED_MULTIPLICITY);
-			} else {
-				attribute.setEType(parameterType(schema));
 			}
-			attribute.setLowerBound(parameter.isRequired() ? 1 : 0);
+			boolean required = Boolean.TRUE.equals(parameter.getRequired()) || parameter.getIn() == ParameterLocation.PATH;
+			attribute.setLowerBound(required ? 1 : 0);
 			OpenApiAnnotations.setIn(attribute, parameter.getIn().getLiteral());
 			if (parameter.getStyle() != null && parameter.getStyle() != ParameterStyle.NULL) {
 				OpenApiAnnotations.setStyle(attribute, parameter.getStyle().getLiteral());
 			}
-			if (parameter.getExplode() != null) {
+			if (parameter.isSetExplode() && parameter.getExplode() != null) {
 				OpenApiAnnotations.setExplode(attribute, parameter.getExplode());
 			}
 			request.getEStructuralFeatures().add(attribute);
+		}
+		if (request.getEStructuralFeatures().isEmpty()) {
+			return body; // every parameter was skipped
 		}
 		if (body != null) {
 			EReference bodyRef = EcoreFactory.eINSTANCE.createEReference();
@@ -337,9 +431,6 @@ public final class OpenApiImporter {
 	 * {@code application/json} one, else a scalar {@code text/plain} one.
 	 */
 	private Schema responseSchema(Operation operation) {
-		if (operation.getResponses() == null) {
-			return null;
-		}
 		Response chosen = null;
 		for (String key : new String[] { "200", "201" }) {
 			chosen = operation.getResponses().get(key);
@@ -348,7 +439,7 @@ public final class OpenApiImporter {
 			}
 		}
 		if (chosen == null) {
-			for (Map.Entry<String, Response> entry : operation.getResponses().entrySet()) {
+			for (Map.Entry<String, Response> entry : operation.getResponses()) {
 				if (entry.getKey() != null && entry.getKey().startsWith("2")) {
 					chosen = entry.getValue();
 					break;
@@ -358,40 +449,18 @@ public final class OpenApiImporter {
 		if (chosen == null) {
 			chosen = operation.getResponses().get("default");
 		}
-		if (chosen == null || chosen.getContent() == null) {
+		chosen = target(chosen);
+		if (chosen == null) {
 			return null;
 		}
-		MediaType json = chosen.getContent().get(JSON);
+		MediaType json = target(chosen.getContent().get(JSON));
 		if (json != null) {
 			return json.getSchema();
 		}
-		MediaType text = chosen.getContent().get(TEXT);
-		return text != null && scalarType(text.getSchema()) != null ? text.getSchema() : null;
-	}
-
-	/** Resolves a schema's {@code $ref} against the generated schemas package. */
-	private EClass resolve(String operation, Schema schema) {
-		if (schema == null) {
-			return null;
-		}
-		String ref = schema.getRef();
-		if (ref == null || ref.isBlank()) {
-			if (schema.getType() != null && !"array".equals(schema.getType())) {
-				diagnostics.add("Operation '" + operation + "': inline schema not resolved (v1 resolves $ref only)");
-			}
-			return null;
-		}
-		if (schemasPackage == null) {
-			diagnostics.add("Operation '" + operation + "': " + ref + " referenced but the document has no components/schemas");
-			return null;
-		}
-		String name = capitalize(ref.substring(ref.lastIndexOf('/') + 1));
-		EClassifier classifier = schemasPackage.getEClassifier(name);
-		if (!(classifier instanceof EClass eClass)) {
-			diagnostics.add("Operation '" + operation + "': " + ref + " did not resolve to an EClass");
-			return null;
-		}
-		return eClass;
+		MediaType text = target(chosen.getContent().get(TEXT));
+		return text != null && text.getSchema() != null && isValueType(text.getSchema().getClassifier())
+				? text.getSchema()
+				: null;
 	}
 
 	// --- helpers -----------------------------------------------------------------------------
@@ -406,44 +475,57 @@ public final class OpenApiImporter {
 		return requestsPackage;
 	}
 
-	/** The Ecore data type for an OpenAPI parameter schema type. */
-	private static EClassifier parameterType(Schema schema) {
-		EcorePackage ecore = EcorePackage.eINSTANCE;
-		String type = schema == null ? null : schema.getType();
-		if (type == null) {
-			return ecore.getEString();
+	/** A Reference Object's target (linked by the codec), the object itself when it is none, {@code null} if unresolved. */
+	private static <T extends EObject> T target(T object) {
+		if (object == null) {
+			return null;
 		}
-		return switch (type) {
-		case "integer" -> ecore.getELong();
-		case "number" -> ecore.getEDouble();
-		case "boolean" -> ecore.getEBoolean();
-		default -> ecore.getEString();
-		};
+		EStructuralFeature ref = object.eClass().getEStructuralFeature("ref");
+		EStructuralFeature target = object.eClass().getEStructuralFeature("target");
+		if (ref == null || target == null || object.eGet(ref) == null) {
+			return object;
+		}
+		@SuppressWarnings("unchecked")
+		T resolved = (T) object.eGet(target);
+		return resolved == null ? null : target(resolved);
 	}
 
 	/**
-	 * The Ecore data type of a scalar (non-{@code $ref}) schema, or {@code null} for anything
-	 * else: {@code integer} → {@code EInt} for {@code int32}, else {@code ELong}; {@code number}
-	 * → {@code EFloat} for {@code float}, else {@code EDouble}; {@code boolean} → {@code EBoolean};
-	 * {@code string} → {@code EString} (whatever its format).
+	 * Whether a schema is a JSON array — its classifier is then the item type. A nullable union
+	 * ({@code anyOf: [<array>, {type: null}]}) counts as the array.
 	 */
-	private static EDataType scalarType(Schema schema) {
-		if (schema == null || schema.getType() == null || (schema.getRef() != null && !schema.getRef().isBlank())) {
-			return null;
+	private static boolean isArray(Schema schema) {
+		if (schema.getType().contains(SimpleType.ARRAY)) {
+			return true;
 		}
-		EcorePackage ecore = EcorePackage.eINSTANCE;
-		String format = schema.getFormat();
-		return switch (schema.getType()) {
-		case "string" -> ecore.getEString();
-		case "integer" -> "int32".equals(format) ? ecore.getEInt() : ecore.getELong();
-		case "number" -> "float".equals(format) ? ecore.getEFloat() : ecore.getEDouble();
-		case "boolean" -> ecore.getEBoolean();
-		default -> null;
-		};
+		if (schema.getType().isEmpty() && schema.getItems() != null) {
+			return true;
+		}
+		List<Schema> union = !schema.getAnyOf().isEmpty() ? schema.getAnyOf() : schema.getOneOf();
+		if (union.size() == 2) {
+			for (int i = 0; i < 2; i++) {
+				Schema other = union.get(1 - i);
+				if (union.get(i).getType().size() == 1 && union.get(i).getType().get(0) == SimpleType.NULL) {
+					return isArray(other);
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Whether a use site's classifier is a value a client can read: a data type other than "any". */
+	private static boolean isValueType(EClassifier classifier) {
+		return classifier instanceof EDataType && classifier != EcorePackage.Literals.EJAVA_OBJECT;
+	}
+
+	/** The Ecore data type of a parameter: its schema's (item) data type, else {@code EString}. */
+	private static EClassifier parameterType(Schema schema) {
+		EClassifier classifier = schema == null ? null : schema.getClassifier();
+		return isValueType(classifier) ? classifier : EcorePackage.eINSTANCE.getEString();
 	}
 
 	private static String fallbackName(String method, String path) {
-		return method.toLowerCase() + path.replaceAll("[{}]", "").replace('/', '_');
+		return method.toLowerCase(Locale.ROOT) + path.replaceAll("[{}]", "").replace('/', '_');
 	}
 
 	private static String capitalize(String name) {

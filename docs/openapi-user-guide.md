@@ -3,18 +3,23 @@
 > **Status: v1.** Implemented and tested (incl. against the public Swagger petstore); the API may
 > still evolve.
 
-Turn an **OpenAPI 3** document into an EMF model and **call its operations** over HTTP — request
+Turn an **OpenAPI 3.0, 3.1 or 3.2** description into an EMF model and **call its operations** over HTTP — request
 and response are `EObject`s of the imported types. Ideal for interop: point at a service's
 `openapi.json`, get typed operations, and invoke them (or drive them from a generated form).
 
-- **Input:** an OpenAPI 3 document (JSON or YAML).
+- **Input:** an OpenAPI 3.0, 3.1 or 3.2 description (JSON or YAML) — the version is taken from its
+  `openapi` member; Swagger 2.0 is rejected.
 - **Output:** the `components/schemas` as an `EPackage`, the path operations as
   [`OpenApiOperation`](/guides/service-clients)s, and a `ServiceClient` to invoke them.
 - **Round-trips:** JSON request/response bodies via the Fennec codec.
 
 The schema→Ecore conversion is done by the **Fennec codec** (`org.eclipse.fennec.codec.jsonschema`
-via `org.eclipse.fennec.codec.openapi`); this utility links the *operations* to those EClasses and
-adds the HTTP client — mirroring the SOAP/WSDL utility.
+via `org.eclipse.fennec.codec.openapi`): every version is read into the codec's **`oas` model**
+(`org.eclipse.fennec.model.oas`), which keeps the schemas as JSON Schema, derives their Ecore and
+links each use site to its classifier (`Schema.getClassifier()`), each `$ref` to its target and each
+operation to its HTTP method. This utility links the *operations* to those classifiers and adds the
+HTTP client — mirroring the SOAP/WSDL utility. Importer, client and caller share one set of
+classes, for every version.
 
 ## Quick start
 
@@ -44,17 +49,20 @@ try (OpenApiServiceClient client = new OpenApiServiceClient(
 `OpenApiImporter.fromJson(...)` / `fromYaml(...)` returns an `OpenApiModel`:
 
 ```java
-model.schemasPackage();   // EPackage generated from components/schemas (EClass per schema)
+model.document();         // the codec's oas model (OpenAPI 3.0, 3.1 and 3.2 alike)
+model.schemasPackage();   // EPackage generated from components/schemas (EClass per schema),
+                          // inline schemas in its sub-package "inline"
+model.generatedPackages(); // schemas + sub-packages + requests: what a registry has to know
 model.operations();       // List<OpenApiOperation>
 model.operation("addPet");
 model.registerInto(resourceSet);   // register the generated packages for (de)serialization
-model.diagnostics();      // unresolved inline schemas, non-JSON content, repaired refs, …
+model.diagnostics();      // codec warnings, non-JSON content, skipped parameters, repaired refs, …
 ```
 
 Each `OpenApiOperation` carries the HTTP binding (`httpMethod()`, `pathTemplate()`) and:
 
 - **`requestType()`** — for a **body-only** operation, the body `EClass` itself; for an operation
-  **with parameters**, a **synthetic request `EClass`** `<Name>Request` whose features carry an
+  **with parameters** (its own and its path item's; `$ref`s resolved), a **synthetic request `EClass`** `<Name>Request` whose features carry an
   `in=path|query|header|cookie|body` annotation (source `http://eclipse.org/fennec/openapi`). A
   required parameter has `lowerBound = 1`; an `array` parameter is a **many-valued** attribute of its
   item type, and a declared `style`/`explode` is kept as annotation detail. So every request is
@@ -62,8 +70,16 @@ Each `OpenApiOperation` carries the HTTP binding (`httpMethod()`, `pathTemplate(
 - **`responseType()`** / **`responseMany()`** — the first `2xx` (or `default`) `application/json`
   schema; a JSON array resolves to its item `EClass` with `responseMany() == true`.
 - **`responseDataType()`** — for a **scalar** answer (`string`, `integer`, `number`, `boolean`, or
-  an array of them; also as `text/plain`) its Ecore data type: `EString`; `EInt` for `int32`, else
-  `ELong`; `EFloat` for `float`, else `EDouble`; `EBoolean`. `responseType()` is then `null`.
+  an array of them; also as `text/plain`) its Ecore data type, as the codec maps it: `EString`;
+  `EIntegerObject` for `int32`, else `ELongObject`; `EFloatObject` for `float`, else
+  `EDoubleObject`; `EBooleanObject`. `responseType()` is then `null`. Parameters are typed the same
+  way.
+
+Request and response types are the codec's classifiers — for a `$ref` the component's `EClass`,
+for an **inline** object schema its class in the `inline` sub-package. 3.1/3.2 schema constructs
+(type arrays instead of `nullable`, `const`, numeric `exclusiveMinimum`/`exclusiveMaximum`,
+`examples`, `$ref` with siblings) come from the codec's JSON Schema mapping and need nothing
+special on the client side.
 
 ### How the client uses the request
 
@@ -99,7 +115,7 @@ Calling the wrong one fails before any HTTP and names the right one.
 
 The importer reads `components/securitySchemes` (`model.securitySchemes()`) and each operation's
 **effective** security requirements (`operation.security()` — its own `security`, falling back to
-the document's global one). On the client you register **credentials per scheme name**; *where*
+the document's global one; an explicit `security: []` lifts the global requirement). On the client you register **credentials per scheme name**; *where*
 the credential goes (header/query/cookie, parameter name, token URL) always comes from the
 document, only the secret comes from you:
 
@@ -139,13 +155,14 @@ registers one ready-to-invoke `ServiceClient`:
 | Property | Meaning |
 | --- | --- |
 | `name` | optional stable, human-chosen name — published as the `name` service property (`ServiceClient.PROP_NAME`) so consumers can select/label the client (e.g. an MCP tool bridge deriving tool names); must be unique among clients sharing a `MetadataWhiteboard` |
-| `documentUrl` | URL the OpenAPI 3 document is fetched from (`http`/`https`/`file`) |
+| `documentUrl` | URL the OpenAPI 3.0/3.1/3.2 description is fetched from (`http`/`https`/`file`) |
 | `baseUri` | base URI of the target service, e.g. `https://api.example.com/v1` |
 | `format` | `json` (default) or `yaml` |
 | `auth` | credentials, one entry per scheme: `<scheme>=<type>:<params>` — `apiKey:<key>`, `bearer:<token>`, `basic:<user>:<pass>`, `clientCredentials:<id>:<secret>` (empty `<scheme>` for a single-scheme document) |
 
-The component binds the framework's shared `MetadataWhiteboard`. Because the importer stamps the
-generated `schemas`/`requests` packages with **constant** nsURIs and the whiteboard keys metadata by
+The component binds the framework's shared `MetadataWhiteboard`. Because the generated packages
+have nsURIs that depend only on the document (`urn:openapi:<title>:<version>`, the constant
+`requests` one) and the whiteboard keys metadata by
 nsURI, each configuration first rewrites those nsURIs to be unique to itself — so several OpenAPI
 clients can share one whiteboard without colliding; the packages are unregistered on deactivation.
 The isolation token is the configured `name` when set (keeping the rewritten nsURIs stable across
@@ -158,15 +175,18 @@ SOAP `.osgi` bundle) but still needs the codec bundles at runtime.
 
 - **Request-response, `application/json`** (plus scalar `text/plain` answers); streaming/SSE is
   out of scope.
-- **`$ref` schemas and scalars only.** Inline (anonymous) *object* request/response schemas are
-  recorded as diagnostics, not resolved. RPC-style and non-JSON content are skipped with a
-  diagnostic.
+- **Object bodies.** A request body must be a JSON object (`$ref` or inline); array or scalar
+  bodies, RPC-style and non-JSON content are skipped with a diagnostic.
+- **OpenAPI 3.2:** the `query` method and `additionalOperations` are imported (any HTTP method);
+  `querystring` parameters and streaming `itemSchema` content are skipped with a diagnostic.
+  Webhooks (3.1+) are not operations a client calls — only noted in the diagnostics.
 - **Parameter styles:** `deepObject` (objects as parameters) is not supported and rejected.
 - **YAML** documents are read through the codec's `YamlFormatProvider`
   (`org.eclipse.fennec.codec.yaml`, plus `jackson-dataformat-yaml` and `snakeyaml-engine` at runtime).
 - **Dynamic-mode client** (JDK `HttpClient` + codec). A Jersey/`codec.rest` variant and a typed
   proxy are on the [service-clients](/guides/service-clients) roadmap.
-- **Codec version:** requires a fennecCodec snapshot from 2026-07-10 or later — older ones left
+- **Codec version:** requires a fennecCodec snapshot with the `oas` model
+  ([emf.codec#321](https://github.com/eclipse-fennec/emf.codec/pull/321), 2026-11-15 or later). Even older ones left
   schema-to-schema `$ref` features untyped ([emf.codec#43](https://github.com/eclipse-fennec/emf.codec/issues/43))
   and dropped the scheme names of security requirements
   ([emf.codec#44](https://github.com/eclipse-fennec/emf.codec/issues/44)). A genuinely
@@ -177,7 +197,7 @@ SOAP `.osgi` bundle) but still needs the codec bundles at runtime.
 ## Dependencies
 
 The importer needs the Fennec codec bundles (`org.eclipse.fennec.codec.openapi`,
-`…codec.jsonschema`, `…codec`, `…openapi.model`) + Jackson; the client adds `org.eclipse.fennec.codec`
+`…codec.jsonschema`, `…codec.jsonschema.model`, `…codec`, `…openapi.model`) + Jackson; the client adds `org.eclipse.fennec.codec`
 for JSON marshalling. All are provided by the `fennecCodec` bnd library. The metadata service
 (`org.eclipse.fennec.emf.osgi.metadata`) comes with the `fennecEMF` library; outside OSGi,
 `MetadataServiceFactory.create()` additionally needs `org.eclipse.fennec.emf.osgi.component.minimal`
