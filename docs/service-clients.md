@@ -31,6 +31,9 @@ and later gRPC and OData.
   - `close()`.
 - **`ServiceInvocationException`** — thrown on transport error, protocol fault (SOAP `Fault`,
   gRPC status, HTTP error) or (de)serialization failure.
+- **`HttpStatusException`** — the subclass for an HTTP error status (`>= 400`) of an HTTP-based
+  client: `status()`, `body()`/`bodyText()`, `contentType()`, `operationName()`. Thrown by the
+  OpenAPI client today.
 
 Marshalling is delegated to each format's (de)serialization layer — the SOAP envelope, the
 Protobuf message, the JSON codec — so the client is just discovery + transport + dispatch.

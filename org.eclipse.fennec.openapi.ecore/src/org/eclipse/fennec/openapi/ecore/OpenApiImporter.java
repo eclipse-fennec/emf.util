@@ -25,6 +25,7 @@ import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -33,12 +34,14 @@ import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.codec.openapi.OpenApiResourceFactoryImpl;
 import org.eclipse.fennec.codec.resource.CodecResource;
+import org.eclipse.fennec.codec.yaml.YamlFormatProvider;
 import org.eclipse.fennec.model.openapi.Components;
 import org.eclipse.fennec.model.openapi.MediaType;
 import org.eclipse.fennec.model.openapi.OpenAPI;
 import org.eclipse.fennec.model.openapi.OpenApiPackage;
 import org.eclipse.fennec.model.openapi.Operation;
 import org.eclipse.fennec.model.openapi.Parameter;
+import org.eclipse.fennec.model.openapi.ParameterStyle;
 import org.eclipse.fennec.model.openapi.PathItem;
 import org.eclipse.fennec.model.openapi.RequestBody;
 import org.eclipse.fennec.model.openapi.Response;
@@ -59,7 +62,9 @@ import org.eclipse.fennec.model.openapi.SecurityScheme;
  * features carry {@code in=path|query|header|cookie} annotations, plus an optional {@code body}
  * containment reference — so a form UI / client can treat every request uniformly as one EObject;</li>
  * <li>response → the first 2xx (or {@code default}) {@code application/json} schema; a JSON array
- * resolves to its item EClass with {@link OpenApiOperation#responseMany()};</li>
+ * resolves to its item EClass with {@link OpenApiOperation#responseMany()}; a scalar schema
+ * ({@code string}, {@code integer}, {@code number}, {@code boolean}, or an array of them — also
+ * as {@code text/plain}) to its {@link OpenApiOperation#responseDataType() data type};</li>
  * <li>security → {@code components/securitySchemes} is exposed on the model as-is; each
  * operation carries its effective requirements (own {@code security}, else the global one).</li>
  * </ul>
@@ -68,6 +73,7 @@ import org.eclipse.fennec.model.openapi.SecurityScheme;
 public final class OpenApiImporter {
 
 	private static final String JSON = "application/json";
+	private static final String TEXT = "text/plain";
 	/** nsURI given to the generated schemas package when the pipeline leaves it unset. */
 	private static final String SCHEMAS_NS = "http://eclipse.org/fennec/openapi/generated/schemas";
 	private static final String REQUESTS_NS = "http://eclipse.org/fennec/openapi/generated/requests";
@@ -96,6 +102,11 @@ public final class OpenApiImporter {
 	/** Imports an OpenAPI 3 document in YAML. */
 	public static OpenApiModel fromYaml(byte[] document) {
 		return doImport(document, "yaml");
+	}
+
+	/** Imports an OpenAPI 3 document in YAML from a stream. */
+	public static OpenApiModel fromYaml(InputStream document) {
+		return fromYaml(readAll(document));
 	}
 
 	private static OpenApiModel doImport(byte[] document, String extension) {
@@ -134,7 +145,10 @@ public final class OpenApiImporter {
 	// --- document loading (codec pipeline) ---------------------------------------------------
 
 	private OpenAPI load(byte[] document, String extension) {
-		OpenApiResourceFactoryImpl factory = new OpenApiResourceFactoryImpl();
+		// the codec reads YAML through its format provider; the JSON factory cannot parse YAML
+		OpenApiResourceFactoryImpl factory = "yaml".equals(extension)
+				? new OpenApiResourceFactoryImpl(new YamlFormatProvider(), OpenApiResourceFactoryImpl.CONTENT_TYPE_OPENAPI_YAML)
+				: new OpenApiResourceFactoryImpl();
 		Resource resource = factory.createResource(URI.createURI("import://openapi." + extension));
 		Map<String, Object> options = new LinkedHashMap<>();
 		options.put(CodecResource.CODEC_ROOT_TYPE, OpenApiPackage.Literals.OPEN_API);
@@ -209,17 +223,20 @@ public final class OpenApiImporter {
 		EClass request = requestType(name, operation.getParameters(), body);
 
 		EClass response = null;
+		EDataType responseValue = null;
 		boolean many = false;
 		Schema responseSchema = responseSchema(operation);
 		if (responseSchema != null) {
-			if ("array".equals(responseSchema.getType()) && responseSchema.getItems() != null) {
-				response = resolve(name, responseSchema.getItems());
-				many = response != null;
-			} else {
-				response = resolve(name, responseSchema);
+			boolean array = "array".equals(responseSchema.getType()) && responseSchema.getItems() != null;
+			Schema single = array ? responseSchema.getItems() : responseSchema;
+			responseValue = scalarType(single);
+			if (responseValue == null) {
+				response = resolve(name, single);
 			}
+			many = array && (response != null || responseValue != null);
 		}
-		target.add(new OpenApiOperation(name, method, path, request, response, many, security(name, operation)));
+		target.add(new OpenApiOperation(name, method, path, request, response, many, security(name, operation),
+				responseValue));
 	}
 
 	/**
@@ -268,7 +285,9 @@ public final class OpenApiImporter {
 
 	/**
 	 * The request type: the body EClass itself when there are no parameters, otherwise a synthetic
-	 * {@code <Name>Request} EClass folding the parameters (annotated {@code in=…}) + optional body.
+	 * {@code <Name>Request} EClass folding the parameters (annotated {@code in=…}, and
+	 * {@code style}/{@code explode} when declared; an {@code array} parameter becomes a many-valued
+	 * attribute of its item type) + optional body.
 	 */
 	private EClass requestType(String operation, List<Parameter> parameters, EClass body) {
 		if (parameters == null || parameters.isEmpty()) {
@@ -283,9 +302,22 @@ public final class OpenApiImporter {
 			}
 			EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
 			attribute.setName(parameter.getName());
-			attribute.setEType(parameterType(parameter.getSchema()));
+			Schema schema = parameter.getSchema();
+			if (schema != null && "array".equals(schema.getType())) {
+				// an array parameter: many-valued, typed by its items (serialized per style/explode)
+				attribute.setEType(parameterType(schema.getItems()));
+				attribute.setUpperBound(EStructuralFeature.UNBOUNDED_MULTIPLICITY);
+			} else {
+				attribute.setEType(parameterType(schema));
+			}
 			attribute.setLowerBound(parameter.isRequired() ? 1 : 0);
 			OpenApiAnnotations.setIn(attribute, parameter.getIn().getLiteral());
+			if (parameter.getStyle() != null && parameter.getStyle() != ParameterStyle.NULL) {
+				OpenApiAnnotations.setStyle(attribute, parameter.getStyle().getLiteral());
+			}
+			if (parameter.getExplode() != null) {
+				OpenApiAnnotations.setExplode(attribute, parameter.getExplode());
+			}
 			request.getEStructuralFeatures().add(attribute);
 		}
 		if (body != null) {
@@ -300,7 +332,10 @@ public final class OpenApiImporter {
 		return request;
 	}
 
-	/** The 2xx (preferring 200/201) or {@code default} JSON response schema, or {@code null}. */
+	/**
+	 * The 2xx (preferring 200/201) or {@code default} response schema, or {@code null}: the
+	 * {@code application/json} one, else a scalar {@code text/plain} one.
+	 */
 	private Schema responseSchema(Operation operation) {
 		if (operation.getResponses() == null) {
 			return null;
@@ -327,7 +362,11 @@ public final class OpenApiImporter {
 			return null;
 		}
 		MediaType json = chosen.getContent().get(JSON);
-		return json == null ? null : json.getSchema();
+		if (json != null) {
+			return json.getSchema();
+		}
+		MediaType text = chosen.getContent().get(TEXT);
+		return text != null && scalarType(text.getSchema()) != null ? text.getSchema() : null;
 	}
 
 	/** Resolves a schema's {@code $ref} against the generated schemas package. */
@@ -379,6 +418,27 @@ public final class OpenApiImporter {
 		case "number" -> ecore.getEDouble();
 		case "boolean" -> ecore.getEBoolean();
 		default -> ecore.getEString();
+		};
+	}
+
+	/**
+	 * The Ecore data type of a scalar (non-{@code $ref}) schema, or {@code null} for anything
+	 * else: {@code integer} → {@code EInt} for {@code int32}, else {@code ELong}; {@code number}
+	 * → {@code EFloat} for {@code float}, else {@code EDouble}; {@code boolean} → {@code EBoolean};
+	 * {@code string} → {@code EString} (whatever its format).
+	 */
+	private static EDataType scalarType(Schema schema) {
+		if (schema == null || schema.getType() == null || (schema.getRef() != null && !schema.getRef().isBlank())) {
+			return null;
+		}
+		EcorePackage ecore = EcorePackage.eINSTANCE;
+		String format = schema.getFormat();
+		return switch (schema.getType()) {
+		case "string" -> ecore.getEString();
+		case "integer" -> "int32".equals(format) ? ecore.getEInt() : ecore.getELong();
+		case "number" -> "float".equals(format) ? ecore.getEFloat() : ecore.getEDouble();
+		case "boolean" -> ecore.getEBoolean();
+		default -> null;
 		};
 	}
 

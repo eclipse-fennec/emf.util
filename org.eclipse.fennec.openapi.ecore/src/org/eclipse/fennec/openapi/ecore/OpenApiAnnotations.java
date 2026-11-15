@@ -17,7 +17,9 @@ import org.eclipse.emf.ecore.EcoreFactory;
 /**
  * The Ecore {@code EAnnotation} contract for the OpenAPI mapping (mirrors the protobuf/SOAP
  * annotation helpers). On a synthetic request {@link org.eclipse.emf.ecore.EClass}, each feature
- * carries where its value goes on the wire: {@code in = path | query | header | cookie | body}.
+ * carries where its value goes on the wire: {@code in = path | query | header | cookie | body} —
+ * plus, when the document declares them, the parameter's {@code style} and {@code explode}
+ * (serialization of arrays; absent = the OpenAPI default for the location).
  */
 public final class OpenApiAnnotations {
 
@@ -33,6 +35,12 @@ public final class OpenApiAnnotations {
 	public static final String IN_COOKIE = "cookie";
 	public static final String IN_BODY = "body";
 
+	/** Feature detail: the declared OpenAPI {@code style} ({@code form}, {@code simple}, …), if any. */
+	public static final String KEY_STYLE = "style";
+
+	/** Feature detail: the declared OpenAPI {@code explode} ({@code true}/{@code false}), if any. */
+	public static final String KEY_EXPLODE = "explode";
+
 	private OpenApiAnnotations() {
 	}
 
@@ -45,6 +53,29 @@ public final class OpenApiAnnotations {
 	/** Stamps the {@code in} location on a synthetic-request feature (importer side). */
 	public static void setIn(EStructuralFeature feature, String in) {
 		annotation(feature).getDetails().put(KEY_IN, in);
+	}
+
+	/** The declared {@code style} of a synthetic-request feature, or {@code null} (= location default). */
+	public static String style(EStructuralFeature feature) {
+		EAnnotation a = feature.getEAnnotation(SOURCE);
+		return a == null ? null : a.getDetails().get(KEY_STYLE);
+	}
+
+	/** The declared {@code explode} of a synthetic-request feature, or {@code null} (= style default). */
+	public static Boolean explode(EStructuralFeature feature) {
+		EAnnotation a = feature.getEAnnotation(SOURCE);
+		String explode = a == null ? null : a.getDetails().get(KEY_EXPLODE);
+		return explode == null ? null : Boolean.valueOf(explode);
+	}
+
+	/** Stamps the declared {@code style} on a synthetic-request feature (importer side). */
+	public static void setStyle(EStructuralFeature feature, String style) {
+		annotation(feature).getDetails().put(KEY_STYLE, style);
+	}
+
+	/** Stamps the declared {@code explode} on a synthetic-request feature (importer side). */
+	public static void setExplode(EStructuralFeature feature, boolean explode) {
+		annotation(feature).getDetails().put(KEY_EXPLODE, Boolean.toString(explode));
 	}
 
 	private static EAnnotation annotation(EModelElement element) {

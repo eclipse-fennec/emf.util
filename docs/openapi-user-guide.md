@@ -56,9 +56,14 @@ Each `OpenApiOperation` carries the HTTP binding (`httpMethod()`, `pathTemplate(
 - **`requestType()`** — for a **body-only** operation, the body `EClass` itself; for an operation
   **with parameters**, a **synthetic request `EClass`** `<Name>Request` whose features carry an
   `in=path|query|header|cookie|body` annotation (source `http://eclipse.org/fennec/openapi`). A
-  required parameter has `lowerBound = 1`. So every request is *one* `EObject` — perfect for a form.
+  required parameter has `lowerBound = 1`; an `array` parameter is a **many-valued** attribute of its
+  item type, and a declared `style`/`explode` is kept as annotation detail. So every request is
+  *one* `EObject` — perfect for a form.
 - **`responseType()`** / **`responseMany()`** — the first `2xx` (or `default`) `application/json`
   schema; a JSON array resolves to its item `EClass` with `responseMany() == true`.
+- **`responseDataType()`** — for a **scalar** answer (`string`, `integer`, `number`, `boolean`, or
+  an array of them; also as `text/plain`) its Ecore data type: `EString`; `EInt` for `int32`, else
+  `ELong`; `EFloat` for `float`, else `EDouble`; `EBoolean`. `responseType()` is then `null`.
 
 ### How the client uses the request
 
@@ -68,9 +73,27 @@ whole request, for body-only operations) is serialized as JSON. The response JSO
 into `responseType()`. Payloads are serialized **without** the EMF `_type` discriminator, so the
 wire is plain interop JSON.
 
+Parameters follow OpenAPI's `style`/`explode` rules: query `form` (exploded by default —
+`tags=a&tags=b`), `spaceDelimited`, `pipeDelimited`; path `simple` (`a,b`), `label`, `matrix`;
+header `simple`; cookie `form`. An empty optional array is not sent.
+
+The answer decides the method:
+
+```java
+EObject pet        = client.invoke("getPetById", request);        // one object
+List<EObject> pets = client.invokeMany("findPetsByStatus", req);  // JSON array of objects, in order
+Object token       = client.invokeValue("loginUser", request);    // scalar (JSON or plain text);
+                                                                  // a List for an array of scalars
+```
+
+Calling the wrong one fails before any HTTP and names the right one.
+
 - `withHeader(name, value)` adds a header to every request.
 - `unwrap(HttpClient.class)` gives you the native client.
-- An HTTP error or a JSON parse failure becomes a `ServiceInvocationException`.
+- An HTTP error status (`>= 400`) becomes an **`HttpStatusException`** (a
+  `ServiceInvocationException`) carrying `status()`, `body()`/`bodyText()` and `contentType()` —
+  map statuses to declared errors without parsing the message. A transport or JSON parse failure
+  becomes a plain `ServiceInvocationException`.
 
 ## Authentication
 
@@ -94,6 +117,12 @@ registered credentials (an empty alternative — anonymous allowed — matches t
 them. A required but unregistered scheme fails fast with a `ServiceInvocationException` *before*
 any HTTP; so does a credential that cannot satisfy the scheme's type (e.g. `apiKey` credentials
 on an `http/basic` scheme).
+
+Building a request yourself (for what the client does not cover)? Apply the same credentials
+with `client.authenticate(operation, target)` — it picks the requirement alternative exactly as
+`invoke` does — or, for one known scheme, `credentials.apply(schemeName, scheme, scopes, target)`;
+`target` is your `OpenApiAuth.Target` (header/query/cookie sink plus the `HttpClient` for token
+requests).
 
 `clientCredentials` POSTs to the flow's declared `tokenUrl` (client id/secret via HTTP Basic,
 the requirement's scopes as `scope`), caches the `access_token` and re-fetches shortly before
@@ -127,10 +156,14 @@ SOAP `.osgi` bundle) but still needs the codec bundles at runtime.
 
 ## Scope / limitations (v1)
 
-- **Request-response, `application/json`, single-object responses.** An array response is imported
-  (`responseMany`) but the client rejects it for now; streaming/SSE is out of scope.
-- **`$ref` schemas only.** Inline (anonymous) request/response schemas are recorded as diagnostics,
-  not resolved. RPC-style and non-JSON content are skipped with a diagnostic.
+- **Request-response, `application/json`** (plus scalar `text/plain` answers); streaming/SSE is
+  out of scope.
+- **`$ref` schemas and scalars only.** Inline (anonymous) *object* request/response schemas are
+  recorded as diagnostics, not resolved. RPC-style and non-JSON content are skipped with a
+  diagnostic.
+- **Parameter styles:** `deepObject` (objects as parameters) is not supported and rejected.
+- **YAML** documents are read through the codec's `YamlFormatProvider`
+  (`org.eclipse.fennec.codec.yaml`, plus `jackson-dataformat-yaml` and `snakeyaml-engine` at runtime).
 - **Dynamic-mode client** (JDK `HttpClient` + codec). A Jersey/`codec.rest` variant and a typed
   proxy are on the [service-clients](/guides/service-clients) roadmap.
 - **Codec version:** requires a fennecCodec snapshot from 2026-07-10 or later — older ones left

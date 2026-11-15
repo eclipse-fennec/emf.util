@@ -203,8 +203,11 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
   during load, read via `components.getSchemasPackage()`), then links path operations to EClasses.
   Parameters fold into a **synthetic request EClass** (`<Name>Request`, features annotated
   `in=path|query|header|cookie|body`, source `http://eclipse.org/fennec/openapi`); body-only ops use
-  the body EClass directly; array responses resolve to the item EClass + `responseMany` (client v1
-  rejects them). `components/securitySchemes` → `model.securitySchemes()` (raw model objects);
+  the body EClass directly; array responses resolve to the item EClass + `responseMany`; scalar
+  answers (`string`/`integer`/`number`/`boolean`, or arrays of them, also `text/plain`) get
+  `responseDataType()` (an `EDataType`; `responseType` null). `array` parameters become
+  many-valued attributes; a declared `style`/`explode` rides as annotation detail. `fromYaml`
+  goes through the codec's `YamlFormatProvider` (`codec.yaml`). `components/securitySchemes` → `model.securitySchemes()` (raw model objects);
   each operation carries its **effective** requirements (`operation.security()`, own → global
   fallback) as plain `List<Map<schemeName, scopes>>` (alternatives = OR, entries = AND).
   **Requires a fennecCodec snapshot ≥ 2026-07-10**: older ones left schema-to-schema `$ref`
@@ -216,12 +219,19 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
 - **`org.eclipse.fennec.openapi.client`** — `OpenApiServiceClient` (JDK `HttpClient` + codec JSON).
   Serializes **without** the EMF type discriminator (`CodecOptions.CODEC_TYPE_INCLUDE=false`) —
   with `_type` on the wire real servers reject the body. Deserializes with
-  `CodecResource.CODEC_ROOT_TYPE` = the operation's response EClass. **Auth:** `OpenApiAuth`
+  `CodecResource.CODEC_ROOT_TYPE` = the operation's response EClass. **The answer picks the
+  method:** `invoke` (one object), `invokeMany` (JSON array of objects → `List<EObject>`),
+  `invokeValue` (scalar, JSON or plain text; `List` for scalar arrays) — the wrong one fails before
+  HTTP and names the right one; `ServiceClient` itself stays `EObject`-only. Parameters are written
+  per `style`/`explode` (`ParameterSerializer`; `deepObject` rejected). HTTP `>= 400` →
+  `service.api.HttpStatusException` (status/body/contentType). **Auth:** `OpenApiAuth`
   credentials registered per scheme name (`withAuth`; single-scheme convenience overload) —
   `apiKey` / `basic` / `bearer(Supplier)` / `clientCredentials` (token from the flow's `tokenUrl`,
   cached until `expires_in`). Placement (header/query/cookie, names, tokenUrl) comes from the
   document; first satisfiable requirement alternative wins, empty alternative = anonymous OK,
-  required-but-unregistered fails fast before HTTP. `authorization_code`/OIDC discovery
+  required-but-unregistered fails fast before HTTP. Callers building a request themselves use the
+  public `client.authenticate(operation, OpenApiAuth.Target)` (same alternative selection) or
+  `OpenApiAuth.apply(...)`. `authorization_code`/OIDC discovery
   deliberately out of scope (headless).
 - **`org.eclipse.fennec.openapi.osgi`** — the first **client** OSGi bundle (Protobuf/SOAP `.osgi`
   register a `Resource.Factory`; OpenAPI has no resource of its own). A **config-driven**
@@ -238,7 +248,8 @@ see `dim-knowledge-atlas/docs/discussion-service-fabric.md` for the big picture)
   `registerPackage` keys by nsURI, so the component rewrites them per config before registering
   (token = `name` if set — restart-stable — else `service.pid`; else two clients sharing the
   whiteboard collide); unregistered on deactivate. Inlines
-  `openapi.client`/`openapi.ecore` (like SOAP). `.osgi.tests` proves it end-to-end in Felix
+  `openapi.client`/`openapi.ecore` (like SOAP) **from the buildpath — never keep a copy of a client
+  class in its own `src/`**: it shadows the client bundle's (one did until #95–#100). `.osgi.tests` proves it end-to-end in Felix
   (ConfigAdmin factory config → import → codec (de)serialize → HTTP round-trip; **first repo OSGi
   test that runs the whole codec stack** — resolves via `resolve.test`, needs
   `-runsystempackages: com.sun.net.httpserver`; the codec's `MetadataServiceComponent` +
