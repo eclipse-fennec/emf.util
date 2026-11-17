@@ -90,7 +90,15 @@ VitePress site in `docs-site/`, published to `https://eclipse-fennec.github.io/e
   publish AND the docs deploy. `build` runs on PRs + feature branches; `license` runs on
   PRs + feature branches (the orchestrators run it as their first job on `main`/`snapshot`
   to avoid a duplicate); `docs` is `workflow_dispatch`-only (the auto docs build/deploy is a
-  job in the orchestrators); plus `scorecard` (OpenSSF) and `dependency-review`.
+  job in the orchestrators); plus `scorecard` (OpenSSF), `dependency-review` and `sbom`.
+- **SBOM + vulnerability gate** (`sbom.yml`, ported from emf.osgi#135): `./gradlew sbom` writes a
+  CycloneDX SBOM of the workspace library's `required.bndrun` (= what consumers get) to
+  `org.eclipse.fennec.util.workspace.library/generated/sbom/` via the `org.gecko.bnd.sbom` bnd
+  exporter, which Gradle fetches into `cnf/cache/sbom-exporter/` and the bndrun `-include`s only
+  once present (`cnf/sbom/plugin.bnd`) — resolve/build/release never load it. Trivy scans it and
+  **fails on fixable HIGH/CRITICAL**; `bndVulnerabilities`/`bndUpdates` (`org.geckoprojects.bnd.update`
+  Gradle plugin, micro policy by default, `-PbndUpdateScope=minor`) report the fixing versions.
+  Both tools are `0.1.0-SNAPSHOT` from the Sonatype snapshot repo until released.
 - **Hardening (in-repo):** top-level `permissions: contents: read` with minimal per-job
   escalation, `step-security/harden-runner`, all actions **SHA-pinned** with `# vX.Y.Z`
   comments, `concurrency` groups. `.github/dependabot.yml` keeps github-actions, gradle,
