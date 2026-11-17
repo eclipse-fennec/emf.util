@@ -28,7 +28,7 @@ io.grpc:grpc-inprocess:1.82.2
 io.grpc:grpc-context:1.82.2
 io.grpc:grpc-netty:1.82.2
 io.perfmark:perfmark-api:0.27.0
-com.google.guava:guava:33.6.0-jre
+com.google.guava:guava:33.7.2-jre
 com.google.guava:failureaccess:1.0.3
 com.google.errorprone:error_prone_annotations:2.50.0
 com.google.code.gson:gson:2.14.0
