@@ -41,9 +41,9 @@ test-runproperties: \
 
 -runbundles: \
 	assertj-core;version='[3.27.7,3.27.8)',\
-	bcpkix;version='[1.84.0,1.84.1)',\
-	bcprov;version='[1.84.0,1.84.1)',\
-	bcutil;version='[1.84.0,1.84.1)',\
+	bcpkix;version='[1.85.0,1.85.1)',\
+	bcprov;version='[1.85.0,1.85.1)',\
+	bcutil;version='[1.85.0,1.85.1)',\
 	com.googlecode.javaewah.JavaEWAH;version='[1.2.3,1.2.4)',\
 	junit-jupiter-api;version='[5.14.2,5.14.3)',\
 	junit-jupiter-params;version='[5.14.2,5.14.3)',\
