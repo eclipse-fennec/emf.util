@@ -11,6 +11,7 @@ export const GUIDES = [
   { file: 'protobuf-user-guide.md', slug: 'protobuf', title: 'EMF ⇄ Protobuf' },
   { file: 'soap-user-guide.md', slug: 'soap', title: 'EMF ⇄ SOAP / WSDL' },
   { file: 'openapi-user-guide.md', slug: 'openapi', title: 'EMF ⇄ OpenAPI / REST' },
+  { file: 'mof-user-guide.md', slug: 'mof', title: 'DMTF MOF → Ecore' },
   { file: 'service-clients.md', slug: 'service-clients', title: 'Service clients' },
   { file: 'jgit-user-guide.md', slug: 'jgit', title: 'Git repositories' },
   { file: 'documentation-generators-user-guide.md', slug: 'documentation', title: 'Ecore documentation' },

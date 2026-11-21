@@ -1,0 +1,8 @@
+Bundle-Name: Fennec EMF DMTF MOF Importer
+Bundle-Description: Derives Ecore from DMTF Managed Object Format (.mof) — the CIM Schema \
+ and vendor schemas built on it (WMI, SMI-S, SMASH/DASH). Bootstrap/design-time, plain EMF.
+
+-library: enableEMF
+
+-testpath: \
+	assertj-core;version=latest
