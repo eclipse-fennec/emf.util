@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.impl.ResourceImpl;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
@@ -53,13 +54,32 @@ class MofCorpusTest {
 		List<EClass> classes = result.getEClasses();
 		System.out.println("CIM schema: " + classes.size() + " classes, " + result.warnings().size() + " warnings");
 		result.warnings().stream().limit(20).forEach(w -> System.out.println("  " + w));
+		assertThat(result.warnings()).isEmpty();
 		assertThat(classes).hasSizeGreaterThan(1000);
-		assertThat(result.packages()).extracting(EPackage::getName).containsExactly("CIM");
+		// the CIM Schema also ships the PRS (Problem Resolution Schema) classes
+		assertThat(result.packages()).extracting(EPackage::getName).contains("CIM");
+
+		// the shapes the WS-CIM XSD import loses (see #109)
+		EClass ethernetPort = result.getEClass("CIM_EthernetPort");
+		assertThat(ethernetPort.getESuperTypes()).containsExactly(result.getEClass("CIM_NetworkPort"));
+		assertThat(MofAnnotations.keys(ethernetPort)).containsExactlyInAnyOrder("SystemCreationClassName",
+				"SystemName", "CreationClassName", "DeviceID");
+		EClass systemDevice = result.getEClass("CIM_SystemDevice");
+		assertThat(MofAnnotations.isSet(systemDevice, "Association")).isTrue();
+		assertThat(MofAnnotations.qualifier(systemDevice, "override.PartComponent"))
+				.isEqualTo("CIM_LogicalDevice REF");
+		EReference part = (EReference) systemDevice.getEAllStructuralFeatures().stream()
+				.filter(f -> f.getName().equals("PartComponent")).findFirst().orElseThrow();
+		assertThat(part.isContainment()).isFalse();
+		assertThat(part.getEType()).isEqualTo(result.getEClass("CIM_ManagedElement"));
+
 		Resource r = new ResourceImpl(org.eclipse.emf.common.util.URI.createURI("mem:/cim.ecore"));
 		new ResourceSetImpl().getResources().add(r);
 		r.getContents().addAll(result.packages());
-		Diagnostic d = Diagnostician.INSTANCE.validate(result.packages().get(0));
-		assertThat(d.getSeverity()).as(d.toString()).isLessThan(Diagnostic.ERROR);
+		for (EPackage p : result.packages()) {
+			Diagnostic d = Diagnostician.INSTANCE.validate(p);
+			assertThat(d.getSeverity()).as(d.toString()).isLessThan(Diagnostic.ERROR);
+		}
 	}
 
 	@Test
