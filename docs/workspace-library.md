@@ -43,6 +43,7 @@ needs) resolves.
 | `org.eclipse.fennec.soap.ecore` | WSDL/XSD → Ecore converter (design time, pulls `org.eclipse.xsd`) |
 | `org.eclipse.fennec.openapi.ecore` | OpenAPI 3 → Ecore importer |
 | `org.eclipse.fennec.openapi.client` | OpenAPI REST `ServiceClient` |
+| `org.eclipse.fennec.mof.ecore` | DMTF MOF (CIM / WMI schemas) → Ecore importer (design time, plain EMF) |
 | `org.eclipse.fennec.openapi.osgi` | Config-driven OpenAPI `ServiceClient` OSGi component |
 | `org.eclipse.fennec.grpc` | gRPC client + server over EMF instances (with the `io.grpc.netty` wrap bundle) |
 | `org.eclipse.fennec.service.api` | The protocol-agnostic `ServiceClient` / `ServiceOperation` API |
