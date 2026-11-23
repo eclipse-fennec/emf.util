@@ -56,7 +56,7 @@ Gradle; the bnd toolchain runs on the **7.4.0 snapshot**.
 | [EMF ⇄ Protobuf](/guides/protobuf) | v1 | Schema-driven (de)serialization of EMF models to Google Protocol Buffers (+ gRPC service extraction). |
 | [EMF ⇄ SOAP / WSDL](/guides/soap) | v1 | WSDL/XSD → Ecore import and SOAP 1.1 envelope (de)serialization of EMF models as XML, incl. a SOAP client. |
 | [EMF ⇄ OpenAPI / REST](/guides/openapi) | v1 | OpenAPI 3 → Ecore import and a REST client that invokes operations with EObject request/response. |
-| [DMTF MOF → Ecore](/guides/mof) | v1 | Import of CIM schemas in Managed Object Format (DMTF CIM Schema, WMI, SMI-S) as Ecore, incl. a `Resource.Factory` for `*.mof`. |
+| [DMTF MOF → Ecore](/guides/mof) | v1 | Import of CIM schemas in Managed Object Format (DMTF CIM Schema, WMI, SMI-S) as Ecore, incl. a `Resource.Factory` for `*.mof`, and a command line that writes `.ecore` + `.genmodel` files. |
 | [Service clients](/guides/service-clients) | v1 | One protocol-agnostic `ServiceClient` API over SOAP, OpenAPI (and, planned, gRPC/OData). |
 | [Git repositories](/guides/jgit) | prototype | Reading and writing files, commits and branches of a local or remote git repository through an OSGi service (JGit). |
 | [Ecore documentation](/guides/documentation) | v1 | Markdown or HTML documentation of an `EPackage`/`EClassifier`, with an optional Mermaid or PlantUML class diagram. |

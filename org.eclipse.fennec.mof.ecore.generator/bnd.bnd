@@ -1,0 +1,16 @@
+Bundle-Name: Fennec EMF DMTF MOF Generator
+Bundle-Description: Writes a DMTF MOF schema as .ecore files and a .genmodel (command line and \
+ Java API around org.eclipse.fennec.mof.ecore). Kept separate from the importer so the importer \
+ does not depend on EMF codegen.
+
+Main-Class: org.eclipse.fennec.mof.ecore.generator.MofGenerator
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.fennec.mof.ecore;version=project,\
+	org.eclipse.emf.codegen.ecore;version=latest,\
+	org.eclipse.emf.codegen;version=latest
+
+-testpath: \
+	assertj-core;version=latest

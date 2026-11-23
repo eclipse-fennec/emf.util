@@ -50,6 +50,11 @@ io.netty:netty-transport-native-unix-common:4.1.137.Final
 # metadata; requires org.eclipse.emf.ecore [2.41,3.0) — aligned with the workspace EMF.
 org.eclipse.emf:org.eclipse.xsd:2.22.0
 
+# EMF GenModel (MOF -> .ecore + .genmodel, org.eclipse.fennec.mof.ecore.generator). Requires
+# org.eclipse.emf.ecore [2.43,3.0) — aligned with the workspace EMF.
+org.eclipse.emf:org.eclipse.emf.codegen.ecore:2.47.0
+org.eclipse.emf:org.eclipse.emf.codegen:2.29.0
+
 # used by configurator
 org.eclipse.parsson:jakarta.json:1.1.7
 org.apache.sling:org.apache.sling.commons.johnzon:2.0.0
