@@ -112,6 +112,51 @@ String narrowed     = MofAnnotations.qualifier(systemDevice, "override.PartCompo
 | `withPackageName(Function)` | schema prefix | class name → package name |
 | `withNsUri(Function)`, `withNsPrefix(Function)` | `urn:mof:<name>`, lower case | package name → nsURI / nsPrefix |
 
+## Generating `.ecore` and `.genmodel` files
+
+Bundle `org.eclipse.fennec.mof.ecore.generator` turns a MOF schema into files — one
+`<package>.ecore` per package (file name in lower case) and, optionally, a `.genmodel` for code
+generation — from the command line or from Java. It is a separate bundle so the importer itself
+does not depend on EMF codegen. Same input and options give byte-identical files (classifiers in
+MOF declaration order, LF line ends), so regenerating shows only real schema changes in a diff.
+
+```bash
+java -cp "org.eclipse.fennec.mof.ecore.jar:org.eclipse.fennec.mof.ecore.generator.jar:<EMF jars>" \
+     org.eclipse.fennec.mof.ecore.generator.MofGenerator \
+     --classes classes.txt --package cim --ns-uri https://example.org/model/cim/2 \
+     --genmodel --model-plugin org.example.cim.model --base-package org.example \
+     cim_schema_2.56.0.mof model/
+```
+
+The EMF jars are `org.eclipse.emf.common`, `.ecore`, `.ecore.xmi`, `.codegen.ecore` and `.codegen`
+(Maven group `org.eclipse.emf`).
+
+| Option | Effect |
+|---|---|
+| `--classes <file>` | only these classes (one per line, `#` comments) plus what they need — `withClasses` |
+| `--package <name>` | every class into one package |
+| `--lower-case-packages` | one package per schema prefix, in lower case (`cim`, `prs` instead of `CIM`, `PRS`), which gives conventional Java package names |
+| `--ns-uri <uri>`, `--ns-prefix <prefix>` | `{package}` is replaced by the package name in lower case, e.g. `https://example.org/model/{package}/2` |
+| `--lenient` | `withStrict(false)` |
+| `--genmodel` | also write `<model>.genmodel`, and the GenModel settings (`modelName`, `basePackage`, `complianceLevel`, `oSGiCompatible`, `copyrightText`) as GenModel annotation on each `EPackage`, so a genmodel re-import does not lose them |
+| `--model-name`, `--model-plugin`, `--model-directory`, `--base-package`, `--compliance`, `--copyright <file>` | GenModel settings; `--model-directory` defaults to `/<model-plugin>/src-gen`, `--compliance` to `21` |
+| `--no-adapter-factory` | no `<Prefix>Switch` / `<Prefix>AdapterFactory` — needed for very large packages: the switch over ≈ 1,600 classes of the complete CIM Schema exceeds the JVM's 64 KB method limit |
+
+Exit code 0 on success, 1 on an import or I/O error (the message names the file, line and
+column, or the unresolved types), 2 on a usage error. Import warnings go to standard error.
+
+From Java:
+
+```java
+MofGenerator.Result r = MofGenerator.generate(Path.of("cim_schema_2.56.0.mof"), Path.of("model"),
+        MofGenerator.Options.defaults()
+                .withImportOptions(ImportOptions.defaults().withPackageName(c -> "cim"))
+                .withGenModel(true)
+                .withModelPluginId("org.example.cim.model")
+                .withBasePackage("org.example"));
+r.files();      // model/cim.ecore, model/cim.genmodel
+```
+
 ## Syntax support
 
 - DSP0004 (MOF 2) class syntax: qualifier lists, classes with superclass and alias,

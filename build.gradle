@@ -139,6 +139,7 @@ subprojects {
             'org.eclipse.fennec.openapi.ecore',
             'org.eclipse.fennec.openapi.client',
             'org.eclipse.fennec.mof.ecore',
+            'org.eclipse.fennec.mof.ecore.generator',
             'org.eclipse.fennec.jgit',
             'org.eclipse.fennec.git.webhook.rest',
             'org.eclipse.fennec.mapping',
